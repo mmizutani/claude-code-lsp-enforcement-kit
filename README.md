@@ -239,32 +239,73 @@ Tracks successful LSP calls in a per-project state file. Other hooks read this s
 
 ## Installation
 
-### Quick Install (let Claude Code do it)
+### Option 1: Give the repo to Claude Code (recommended)
 
-Clone this repo and tell Claude Code:
-
-```
-Install the LSP enforcement hooks from this repo into my ~/.claude/ setup.
-Read the README for instructions.
+```bash
+git clone https://github.com/nesaminua/claude-code-lsp-enforcement-kit.git
+cd claude-code-lsp-enforcement-kit
 ```
 
-Claude Code will read this README and follow the steps below automatically.
+Then tell Claude Code:
 
-**Important for Claude Code:** When modifying `~/.claude/settings.json`, you MUST **merge** the hook entries into any existing `hooks` configuration. Do NOT overwrite the file. Read the current `settings.json` first, then add the new entries alongside existing ones.
+```
+Run bash install.sh in this repo to set up LSP enforcement hooks.
+```
 
----
+The install script:
+- Copies 5 hooks to `~/.claude/hooks/`
+- Copies the LSP-first rule to `~/.claude/rules/`
+- **Merges** hook registrations into your existing `~/.claude/settings.json` (won't overwrite your other hooks)
+- Enables the built-in `typescript-lsp` plugin
+- Creates `~/.claude/state/` for tracking
+- Verifies everything at the end
 
-### Manual Setup
+### Option 2: Run the script yourself
+
+```bash
+git clone https://github.com/nesaminua/claude-code-lsp-enforcement-kit.git
+cd claude-code-lsp-enforcement-kit
+bash install.sh
+```
+
+Output:
+```
+=== LSP Enforcement Kit — Install ===
+
+[1/4] Directories ready
+[2/4] Copied 5 hooks + 1 rule
+[3/4] settings.json updated (merged, not overwritten)
+[4/4] Verifying...
+
+  Hooks installed:  5/5
+  Rule installed:   yes
+  Plugin enabled:   yes
+  State directory:  yes
+
+Done. Restart Claude Code to activate.
+```
+
+### Option 3: Manual setup
+
+<details>
+<summary>Click to expand manual steps</summary>
 
 #### Prerequisites
 
 - Claude Code (CLI, Desktop, or IDE extension)
-- `typescript-lsp` plugin enabled (built-in)
 - TypeScript/JavaScript project
 
-#### Step 1: Enable the Plugin
+#### Step 1: Copy files
 
-In `~/.claude/settings.json`, ensure `enabledPlugins` includes:
+```bash
+mkdir -p ~/.claude/hooks ~/.claude/state ~/.claude/rules
+cp hooks/*.js ~/.claude/hooks/
+cp rules/lsp-first.md ~/.claude/rules/
+```
+
+#### Step 2: Enable the plugin
+
+In `~/.claude/settings.json`, add to `enabledPlugins`:
 
 ```json
 {
@@ -274,17 +315,9 @@ In `~/.claude/settings.json`, ensure `enabledPlugins` includes:
 }
 ```
 
-#### Step 2: Copy Hook Files
+#### Step 3: Register hooks in settings.json
 
-```bash
-mkdir -p ~/.claude/hooks ~/.claude/state ~/.claude/rules
-cp hooks/*.js ~/.claude/hooks/
-cp rules/lsp-first.md ~/.claude/rules/
-```
-
-#### Step 3: Register Hooks in settings.json
-
-**IMPORTANT:** If you already have hooks in `~/.claude/settings.json`, **add** these entries to your existing arrays — don't replace them.
+**IMPORTANT:** If you already have hooks, **add** these entries to your existing arrays — don't replace them.
 
 Add to `PreToolUse` array:
 
@@ -316,7 +349,9 @@ Add to `PostToolUse` array:
 }
 ```
 
-#### Step 4: Verify
+</details>
+
+### Verify
 
 Restart Claude Code, then ask:
 
