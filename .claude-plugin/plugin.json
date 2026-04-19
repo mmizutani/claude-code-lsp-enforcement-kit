@@ -1,0 +1,11 @@
+{
+  "name": "lsp-enforcement-kit",
+  "description": "Physical enforcement of LSP-first navigation in Claude Code. Stop burning tokens on Grep — make Claude navigate code like an IDE.",
+  "version": "3.0.0",
+  "author": {
+    "name": "mmizutani"
+  },
+  "repository": "https://github.com/mmizutani/claude-code-lsp-enforcement-kit",
+  "license": "MIT",
+  "keywords": ["lsp", "enforcement", "navigation", "cclsp", "serena"]
+}

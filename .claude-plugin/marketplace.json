@@ -1,0 +1,13 @@
+{
+  "name": "claude-code-lsp-enforcement-kit",
+  "owner": {
+    "name": "mmizutani"
+  },
+  "plugins": [
+    {
+      "name": "lsp-enforcement-kit",
+      "source": ".",
+      "description": "Physical enforcement of LSP-first navigation in Claude Code. Stop burning tokens on Grep."
+    }
+  ]
+}
