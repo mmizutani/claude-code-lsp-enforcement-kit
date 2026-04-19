@@ -1,0 +1,559 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code.claude.com/schemas/plugin.json",
+  "title": "Unofficial JSON Schema of Claude Code Plugin manifest (.claude-plugin/plugin.json) constructed based on official documentation https://code.claude.com/docs/en/plugins-reference",
+  "description": "Schema for Claude Code plugin.json manifest file",
+  "type": "object",
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique identifier (kebab-case, no spaces)",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "examples": [
+        "deployment-tools",
+        "my-plugin"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "examples": [
+        "1.0.0",
+        "2.1.0",
+        "2.0.0-beta.1"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief explanation of plugin purpose",
+      "examples": [
+        "Deployment automation tools"
+      ]
+    },
+    "author": {
+      "type": "object",
+      "description": "Author information",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Author name",
+          "examples": [
+            "Dev Team",
+            "Author Name"
+          ]
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Author email address",
+          "examples": [
+            "dev@company.com",
+            "author@example.com"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Author URL",
+          "examples": [
+            "https://github.com/author"
+          ]
+        }
+      }
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "description": "Documentation URL",
+      "examples": [
+        "https://docs.example.com",
+        "https://docs.example.com/plugin"
+      ]
+    },
+    "repository": {
+      "type": "string",
+      "format": "uri",
+      "description": "Source code URL",
+      "examples": [
+        "https://github.com/user/plugin",
+        "https://github.com/author/plugin"
+      ]
+    },
+    "license": {
+      "type": "string",
+      "description": "License identifier (SPDX recommended)",
+      "examples": [
+        "MIT",
+        "Apache-2.0"
+      ]
+    },
+    "keywords": {
+      "type": "array",
+      "description": "Discovery tags for the plugin",
+      "items": {
+        "type": "string"
+      },
+      "examples": [
+        [
+          "deployment",
+          "ci-cd"
+        ],
+        [
+          "keyword1",
+          "keyword2"
+        ]
+      ]
+    },
+    "commands": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to additional command file or directory (must start with ./)",
+          "pattern": "^\\./.*$",
+          "examples": [
+            "./custom/cmd.md",
+            "./custom/commands/special.md"
+          ]
+        },
+        {
+          "type": "array",
+          "description": "Array of paths to additional command files or directories",
+          "items": {
+            "type": "string",
+            "pattern": "^\\./.*$"
+          },
+          "examples": [
+            [
+              "./cmd1.md"
+            ],
+            [
+              "./specialized/deploy.md",
+              "./utilities/batch-process.md"
+            ]
+          ]
+        }
+      ],
+      "description": "Additional command files/directories (supplements default commands/ directory)"
+    },
+    "agents": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to an additional agent markdown file (must start with ./ and end with .md)",
+          "pattern": "^\\./.*\\.md$",
+          "examples": [
+            "./custom/agents/reviewer.md"
+          ]
+        },
+        {
+          "type": "array",
+          "description": "Array of paths to additional agent markdown files",
+          "items": {
+            "type": "string",
+            "pattern": "^\\./.*\\.md$"
+          },
+          "examples": [
+            [
+              "./custom-agents/reviewer.md",
+              "./custom-agents/tester.md"
+            ]
+          ]
+        }
+      ],
+      "description": "Additional agent markdown files (replaces the default agents/ directory when specified)"
+    },
+    "skills": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to additional skill directory (must start with ./)",
+          "pattern": "^\\./.*$",
+          "examples": [
+            "./custom/skills/"
+          ]
+        },
+        {
+          "type": "array",
+          "description": "Array of paths to additional skill directories",
+          "items": {
+            "type": "string",
+            "pattern": "^\\./.*$"
+          }
+        }
+      ],
+      "description": "Additional skill directories (supplements default skills/ directory)"
+    },
+    "hooks": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to hook configuration JSON file (must start with ./)",
+          "pattern": "^\\./.*\\.json$",
+          "examples": [
+            "./hooks.json",
+            "./config/hooks.json"
+          ]
+        },
+        {
+          "$ref": "#/$defs/hooksConfig"
+        }
+      ],
+      "description": "Hook configuration path or inline configuration"
+    },
+    "mcpServers": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to MCP configuration JSON file (must start with ./)",
+          "pattern": "^\\./.*\\.json$",
+          "examples": [
+            "./mcp-config.json",
+            "./.mcp.json"
+          ]
+        },
+        {
+          "$ref": "#/$defs/mcpServersConfig"
+        }
+      ],
+      "description": "MCP server configuration path or inline configuration"
+    },
+    "outputStyles": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to output style file or directory (must start with ./)",
+          "pattern": "^\\./.*$",
+          "examples": [
+            "./styles/"
+          ]
+        },
+        {
+          "type": "array",
+          "description": "Array of paths to output style files or directories",
+          "items": {
+            "type": "string",
+            "pattern": "^\\./.*$"
+          }
+        }
+      ],
+      "description": "Additional output style files/directories"
+    },
+    "lspServers": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to LSP configuration JSON file (must start with ./)",
+          "pattern": "^\\./.*\\.json$",
+          "examples": [
+            "./.lsp.json"
+          ]
+        },
+        {
+          "$ref": "#/$defs/lspServersConfig"
+        }
+      ],
+      "description": "Language Server Protocol configuration for code intelligence"
+    }
+  },
+  "$defs": {
+    "hooksConfig": {
+      "type": "object",
+      "description": "Inline hook configuration",
+      "additionalProperties": false,
+      "properties": {
+        "hooks": {
+          "type": "object",
+          "description": "Hook event handlers",
+          "additionalProperties": false,
+          "properties": {
+            "PreToolUse": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "PostToolUse": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "PostToolUseFailure": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "PermissionRequest": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "UserPromptSubmit": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "Notification": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "Stop": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "SubagentStart": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "SubagentStop": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "SessionStart": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "SessionEnd": {
+              "$ref": "#/$defs/hookEventHandlers"
+            },
+            "PreCompact": {
+              "$ref": "#/$defs/hookEventHandlers"
+            }
+          }
+        }
+      }
+    },
+    "hookEventHandlers": {
+      "type": "array",
+      "description": "Array of hook handlers for an event",
+      "items": {
+        "type": "object",
+        "properties": {
+          "matcher": {
+            "type": "string",
+            "description": "Regex pattern to match tool names",
+            "examples": [
+              "Write|Edit",
+              ".*"
+            ]
+          },
+          "hooks": {
+            "type": "array",
+            "description": "Array of hook actions to execute",
+            "items": {
+              "$ref": "#/$defs/hookAction"
+            }
+          }
+        }
+      }
+    },
+    "hookAction": {
+      "type": "object",
+      "description": "A single hook action",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "command",
+            "prompt",
+            "agent"
+          ],
+          "description": "Type of hook action"
+        },
+        "command": {
+          "type": "string",
+          "description": "Shell command to execute (for type: command). Use ${CLAUDE_PLUGIN_ROOT} for plugin paths.",
+          "examples": [
+            "${CLAUDE_PLUGIN_ROOT}/scripts/format-code.sh"
+          ]
+        }
+      }
+    },
+    "mcpServersConfig": {
+      "type": "object",
+      "description": "Inline MCP servers configuration",
+      "additionalProperties": {
+        "$ref": "#/$defs/mcpServerDefinition"
+      }
+    },
+    "mcpServerDefinition": {
+      "type": "object",
+      "description": "MCP server definition",
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to start the MCP server. Use ${CLAUDE_PLUGIN_ROOT} for plugin paths.",
+          "examples": [
+            "${CLAUDE_PLUGIN_ROOT}/servers/db-server",
+            "npx"
+          ]
+        },
+        "args": {
+          "type": "array",
+          "description": "Command-line arguments for the server",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "--config",
+              "${CLAUDE_PLUGIN_ROOT}/config.json"
+            ]
+          ]
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables for the server",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "examples": [
+            {
+              "DB_PATH": "${CLAUDE_PLUGIN_ROOT}/data"
+            }
+          ]
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for the server",
+          "examples": [
+            "${CLAUDE_PLUGIN_ROOT}"
+          ]
+        }
+      }
+    },
+    "lspServersConfig": {
+      "type": "object",
+      "description": "Inline LSP servers configuration",
+      "additionalProperties": {
+        "$ref": "#/$defs/lspServerDefinition"
+      }
+    },
+    "lspServerDefinition": {
+      "type": "object",
+      "description": "LSP server definition",
+      "required": [
+        "command",
+        "extensionToLanguage"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The LSP binary to execute (must be in PATH)",
+          "examples": [
+            "gopls",
+            "typescript-language-server",
+            "rust-analyzer"
+          ]
+        },
+        "extensionToLanguage": {
+          "type": "object",
+          "description": "Maps file extensions to language identifiers",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "examples": [
+            {
+              ".go": "go"
+            },
+            {
+              ".ts": "typescript",
+              ".tsx": "typescriptreact"
+            }
+          ]
+        },
+        "args": {
+          "type": "array",
+          "description": "Command-line arguments for the LSP server",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "serve"
+            ],
+            [
+              "--stdio"
+            ]
+          ]
+        },
+        "transport": {
+          "type": "string",
+          "enum": [
+            "stdio",
+            "socket"
+          ],
+          "default": "stdio",
+          "description": "Communication transport"
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables to set when starting the server",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "initializationOptions": {
+          "type": "object",
+          "description": "Options passed to the server during initialization"
+        },
+        "settings": {
+          "type": "object",
+          "description": "Settings passed via workspace/didChangeConfiguration"
+        },
+        "workspaceFolder": {
+          "type": "string",
+          "description": "Workspace folder path for the server"
+        },
+        "startupTimeout": {
+          "type": "integer",
+          "description": "Max time to wait for server startup (milliseconds)",
+          "minimum": 0
+        },
+        "shutdownTimeout": {
+          "type": "integer",
+          "description": "Max time to wait for graceful shutdown (milliseconds)",
+          "minimum": 0
+        },
+        "restartOnCrash": {
+          "type": "boolean",
+          "description": "Whether to automatically restart the server if it crashes"
+        },
+        "maxRestarts": {
+          "type": "integer",
+          "description": "Maximum number of restart attempts before giving up",
+          "minimum": 0
+        },
+        "loggingConfig": {
+          "$ref": "#/$defs/lspLoggingConfig"
+        }
+      }
+    },
+    "lspLoggingConfig": {
+      "type": "object",
+      "description": "Debug logging configuration (enabled with --enable-lsp-logging)",
+      "properties": {
+        "args": {
+          "type": "array",
+          "description": "Additional command-line arguments appended when logging is enabled",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "--log-level",
+              "4"
+            ]
+          ]
+        },
+        "env": {
+          "type": "object",
+          "description": "Additional environment variables merged when logging is enabled. Use ${CLAUDE_PLUGIN_LSP_LOG_FILE} for log file path.",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "examples": [
+            {
+              "TSS_LOG": "-level verbose -file ${CLAUDE_PLUGIN_LSP_LOG_FILE}"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,771 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code.claude.com/schemas/marketplace.schema.json",
+  "title": "Unofficial JSON Schema of Claude Code Plugin Marketplace manifest (.claude-plugin/marketplace.json) constructed based on official documentation https://code.claude.com/docs/en/plugin-marketplaces",
+  "description": "JSON Schema for Claude Code plugin marketplace configuration (.claude-plugin/marketplace.json)",
+  "type": "object",
+  "required": [
+    "name",
+    "owner",
+    "plugins"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Marketplace identifier (kebab-case, no spaces). This is public-facing: users see it when installing plugins (e.g., /plugin install my-tool@your-marketplace).",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "minLength": 1,
+      "maxLength": 100,
+      "not": {
+        "enum": [
+          "claude-code-marketplace",
+          "claude-code-plugins",
+          "claude-plugins-official",
+          "anthropic-marketplace",
+          "anthropic-plugins",
+          "agent-skills",
+          "life-sciences"
+        ]
+      },
+      "examples": [
+        "company-tools",
+        "team-plugins",
+        "my-plugins",
+        "acme-tools"
+      ]
+    },
+    "owner": {
+      "$ref": "#/$defs/owner",
+      "description": "Marketplace maintainer information"
+    },
+    "plugins": {
+      "type": "array",
+      "description": "List of available plugins in the marketplace",
+      "items": {
+        "$ref": "#/$defs/pluginEntry"
+      },
+      "minItems": 0
+    },
+    "metadata": {
+      "$ref": "#/$defs/marketplaceMetadata",
+      "description": "Optional marketplace metadata"
+    }
+  },
+  "$defs": {
+    "owner": {
+      "type": "object",
+      "description": "Marketplace maintainer information",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the maintainer or team",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "email": {
+          "type": "string",
+          "description": "Contact email for the maintainer",
+          "format": "email"
+        }
+      }
+    },
+    "author": {
+      "type": "object",
+      "description": "Plugin author information",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Author's name",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "email": {
+          "type": "string",
+          "description": "Author's email address",
+          "format": "email"
+        }
+      }
+    },
+    "marketplaceMetadata": {
+      "type": "object",
+      "description": "Optional metadata for the marketplace",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Brief marketplace description",
+          "maxLength": 500
+        },
+        "version": {
+          "type": "string",
+          "description": "Marketplace version",
+          "examples": [
+            "1.0.0",
+            "2.1.0"
+          ]
+        },
+        "pluginRoot": {
+          "type": "string",
+          "description": "Base directory prepended to relative plugin source paths (e.g., './plugins' lets you write 'source': 'formatter' instead of 'source': './plugins/formatter')",
+          "pattern": "^\\./.*$",
+          "examples": [
+            "./plugins",
+            "./packages"
+          ]
+        }
+      }
+    },
+    "pluginEntry": {
+      "type": "object",
+      "description": "A plugin entry in the marketplace. Can include any field from the plugin manifest schema plus marketplace-specific fields (source, category, tags, strict).",
+      "required": [
+        "name",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Plugin identifier (kebab-case, no spaces). This is public-facing: users see it when installing (e.g., /plugin install my-plugin@marketplace).",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "minLength": 1,
+          "maxLength": 100,
+          "examples": [
+            "code-formatter",
+            "deployment-tools",
+            "review-plugin"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/pluginSource",
+          "description": "Where to fetch the plugin from"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief plugin description",
+          "maxLength": 500
+        },
+        "version": {
+          "type": "string",
+          "description": "Plugin version",
+          "examples": [
+            "1.0.0",
+            "2.1.0"
+          ]
+        },
+        "author": {
+          "$ref": "#/$defs/author",
+          "description": "Plugin author information (name required, email optional)"
+        },
+        "homepage": {
+          "type": "string",
+          "description": "Plugin homepage or documentation URL",
+          "format": "uri"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Source code repository URL",
+          "format": "uri"
+        },
+        "license": {
+          "type": "string",
+          "description": "SPDX license identifier (e.g., MIT, Apache-2.0)",
+          "examples": [
+            "MIT",
+            "Apache-2.0",
+            "GPL-3.0",
+            "BSD-3-Clause",
+            "ISC"
+          ]
+        },
+        "keywords": {
+          "type": "array",
+          "description": "Tags for plugin discovery and categorization",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "uniqueItems": true,
+          "maxItems": 20
+        },
+        "category": {
+          "type": "string",
+          "description": "Plugin category for organization",
+          "examples": [
+            "productivity",
+            "security",
+            "testing",
+            "devops",
+            "utilities",
+            "documentation"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "description": "Tags for searchability",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "uniqueItems": true,
+          "maxItems": 20
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Controls whether plugins need their own plugin.json file. When true (default), the plugin source must contain a plugin.json, and fields here get merged with it. When false, the plugin doesn't need its own plugin.json; the marketplace entry defines everything.",
+          "default": true
+        },
+        "commands": {
+          "$ref": "#/$defs/componentPaths",
+          "description": "Custom paths to command files or directories"
+        },
+        "agents": {
+          "$ref": "#/$defs/agentPaths",
+          "description": "Custom paths to agent markdown files"
+        },
+        "skills": {
+          "$ref": "#/$defs/componentPaths",
+          "description": "Custom paths to skill files or directories"
+        },
+        "hooks": {
+          "$ref": "#/$defs/hooksConfig",
+          "description": "Custom hooks configuration or path to hooks file"
+        },
+        "mcpServers": {
+          "$ref": "#/$defs/mcpServersConfig",
+          "description": "MCP server configurations or path to MCP config"
+        },
+        "lspServers": {
+          "$ref": "#/$defs/lspServersConfig",
+          "description": "LSP server configurations or path to LSP config"
+        }
+      }
+    },
+    "pluginSource": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": ".",
+          "description": "Plugin is at the marketplace root (self-referencing)"
+        },
+        {
+          "type": "string",
+          "description": "Relative path to plugin directory (must start with ./)",
+          "pattern": "^\\./[^.][^/]*(/[^/]+)*$",
+          "examples": [
+            "./plugins/my-plugin",
+            "./plugins/formatter"
+          ]
+        },
+        {
+          "$ref": "#/$defs/githubSource"
+        },
+        {
+          "$ref": "#/$defs/urlSource"
+        }
+      ]
+    },
+    "githubSource": {
+      "type": "object",
+      "description": "GitHub repository source",
+      "required": [
+        "source",
+        "repo"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "github"
+        },
+        "repo": {
+          "type": "string",
+          "description": "GitHub repository in owner/repo format",
+          "pattern": "^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$",
+          "examples": [
+            "anthropics/claude-code",
+            "company/deploy-plugin",
+            "owner/plugin-repo"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git reference (branch, tag, or commit SHA)",
+          "examples": [
+            "main",
+            "v1.0.0",
+            "v2.0",
+            "develop"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "description": "Subdirectory path within the repository",
+          "pattern": "^[^/].*$",
+          "examples": [
+            "plugins/my-plugin",
+            "packages/formatter"
+          ]
+        }
+      }
+    },
+    "urlSource": {
+      "type": "object",
+      "description": "URL source for Git repositories (GitLab, Bitbucket, self-hosted, etc.)",
+      "required": [
+        "source",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "url"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the Git repository",
+          "format": "uri",
+          "examples": [
+            "https://gitlab.com/team/plugin.git",
+            "https://gitlab.com/company/plugins.git",
+            "https://plugins.example.com/marketplace.json"
+          ]
+        }
+      }
+    },
+    "componentPaths": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Single path to component file or directory (relative to plugin root). Use '.' to refer to the plugin root itself.",
+          "pattern": "^\\.(/.*)?$",
+          "examples": [
+            ".",
+            "./commands/",
+            "./custom/agents/"
+          ]
+        },
+        {
+          "type": "array",
+          "description": "Multiple paths to component files or directories",
+          "items": {
+            "type": "string",
+            "pattern": "^\\.(/.*)?$"
+          },
+          "minItems": 1,
+          "examples": [
+            [
+              "./commands/core/",
+              "./commands/enterprise/",
+              "./commands/experimental/preview.md"
+            ],
+            [
+              "./agents/security-reviewer.md",
+              "./agents/compliance-checker.md"
+            ]
+          ]
+        }
+      ]
+    },
+    "agentPaths": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Single path to an agent markdown file (relative to plugin root)",
+          "pattern": "^\\./.*\\.md$",
+          "examples": [
+            "./agents/security-reviewer.md"
+          ]
+        },
+        {
+          "type": "array",
+          "description": "Multiple paths to agent markdown files",
+          "items": {
+            "type": "string",
+            "pattern": "^\\./.*\\.md$"
+          },
+          "minItems": 1,
+          "examples": [
+            [
+              "./agents/security-reviewer.md",
+              "./agents/compliance-checker.md"
+            ]
+          ]
+        }
+      ]
+    },
+    "hooksConfig": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to hooks configuration file",
+          "pattern": "^\\./.*\\.json$",
+          "examples": [
+            "./config/hooks.json",
+            "./hooks/hooks.json"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Inline hooks configuration",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^(PreToolUse|PostToolUse|Stop|SubagentStop|SessionStart|SessionEnd|UserPromptSubmit|PreCompact|Notification)$": {
+              "$ref": "#/$defs/hookEventConfig"
+            }
+          }
+        }
+      ]
+    },
+    "hookEventConfig": {
+      "type": "array",
+      "description": "Array of hook matchers for an event",
+      "items": {
+        "type": "object",
+        "required": [
+          "hooks"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "matcher": {
+            "type": "string",
+            "description": "Regex pattern to match tool names (e.g., 'Write|Edit')",
+            "examples": [
+              "Write|Edit",
+              ".*",
+              "Bash"
+            ]
+          },
+          "hooks": {
+            "type": "array",
+            "description": "Array of hooks to execute",
+            "items": {
+              "$ref": "#/$defs/hookDefinition"
+            },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "hookDefinition": {
+      "type": "object",
+      "description": "Individual hook definition",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of hook",
+          "enum": [
+            "command",
+            "prompt",
+            "agent"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "description": "Command to execute (for type: command). Use ${CLAUDE_PLUGIN_ROOT} for plugin-relative paths.",
+          "examples": [
+            "${CLAUDE_PLUGIN_ROOT}/scripts/validate.sh",
+            "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/check-style.sh"
+          ]
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt text (for type: prompt)"
+        },
+        "agent": {
+          "type": "string",
+          "description": "Agent name to invoke (for type: agent)"
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Timeout in seconds for hook execution",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 30
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "command"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "command"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "prompt"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "prompt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "agent"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "agent"
+            ]
+          }
+        }
+      ]
+    },
+    "mcpServersConfig": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to MCP servers configuration file",
+          "pattern": "^\\./.*\\.json$",
+          "examples": [
+            "./mcp-config.json",
+            "./.mcp.json"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Inline MCP server configurations",
+          "additionalProperties": {
+            "$ref": "#/$defs/mcpServerDefinition"
+          }
+        }
+      ]
+    },
+    "mcpServerDefinition": {
+      "type": "object",
+      "description": "MCP server definition",
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to start the MCP server. Use ${CLAUDE_PLUGIN_ROOT} for plugin-relative paths.",
+          "examples": [
+            "${CLAUDE_PLUGIN_ROOT}/servers/db-server",
+            "node ${CLAUDE_PLUGIN_ROOT}/mcp/server.js"
+          ]
+        },
+        "args": {
+          "type": "array",
+          "description": "Arguments to pass to the command",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "--config",
+              "${CLAUDE_PLUGIN_ROOT}/config.json"
+            ],
+            [
+              "--port",
+              "3000"
+            ]
+          ]
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables for the server",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "lspServersConfig": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to LSP servers configuration file",
+          "pattern": "^\\./.*\\.json$",
+          "examples": [
+            "./.lsp.json",
+            "./config/lsp-servers.json"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Inline LSP server configurations",
+          "additionalProperties": {
+            "$ref": "#/$defs/lspServerDefinition"
+          }
+        }
+      ]
+    },
+    "lspServerDefinition": {
+      "type": "object",
+      "description": "LSP server definition",
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to start the LSP server. Use ${CLAUDE_PLUGIN_ROOT} for plugin-relative paths.",
+          "examples": [
+            "${CLAUDE_PLUGIN_ROOT}/servers/lsp-server",
+            "node ${CLAUDE_PLUGIN_ROOT}/lsp/server.js"
+          ]
+        },
+        "args": {
+          "type": "array",
+          "description": "Arguments to pass to the command",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables for the server",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "name": "my-plugins",
+      "owner": {
+        "name": "Your Name"
+      },
+      "plugins": [
+        {
+          "name": "review-plugin",
+          "source": "./plugins/review-plugin",
+          "description": "Adds a /review command for quick code reviews"
+        }
+      ]
+    },
+    {
+      "name": "company-tools",
+      "owner": {
+        "name": "DevTools Team",
+        "email": "devtools@example.com"
+      },
+      "metadata": {
+        "description": "Internal development tools for our team",
+        "version": "1.0.0",
+        "pluginRoot": "./plugins"
+      },
+      "plugins": [
+        {
+          "name": "code-formatter",
+          "source": "./plugins/formatter",
+          "description": "Automatic code formatting on save",
+          "version": "2.1.0",
+          "author": {
+            "name": "DevTools Team"
+          }
+        },
+        {
+          "name": "deployment-tools",
+          "source": {
+            "source": "github",
+            "repo": "company/deploy-plugin"
+          },
+          "description": "Deployment automation tools"
+        },
+        {
+          "name": "enterprise-tools",
+          "source": {
+            "source": "github",
+            "repo": "company/enterprise-plugin"
+          },
+          "description": "Enterprise workflow automation tools",
+          "version": "2.1.0",
+          "author": {
+            "name": "Enterprise Team",
+            "email": "enterprise@example.com"
+          },
+          "homepage": "https://docs.example.com/plugins/enterprise-tools",
+          "repository": "https://github.com/company/enterprise-plugin",
+          "license": "MIT",
+          "keywords": [
+            "enterprise",
+            "workflow",
+            "automation"
+          ],
+          "category": "productivity",
+          "commands": [
+            "./commands/core/",
+            "./commands/enterprise/",
+            "./commands/experimental/preview.md"
+          ],
+          "agents": [
+            "./agents/security-reviewer.md",
+            "./agents/compliance-checker.md"
+          ],
+          "hooks": {
+            "PostToolUse": [
+              {
+                "matcher": "Write|Edit",
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/validate.sh"
+                  }
+                ]
+              }
+            ]
+          },
+          "mcpServers": {
+            "enterprise-db": {
+              "command": "${CLAUDE_PLUGIN_ROOT}/servers/db-server",
+              "args": [
+                "--config",
+                "${CLAUDE_PLUGIN_ROOT}/config.json"
+              ]
+            }
+          },
+          "strict": false
+        },
+        {
+          "name": "git-plugin",
+          "source": {
+            "source": "url",
+            "url": "https://gitlab.com/team/plugin.git"
+          },
+          "description": "Git workflow tools from GitLab"
+        }
+      ]
+    }
+  ]
+}
