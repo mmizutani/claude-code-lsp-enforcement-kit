@@ -55,9 +55,11 @@ describe('marketplace.json', () => {
     assert.equal(entry.name, pluginJson.name);
   });
 
-  it('plugin source is "." (self-referencing)', () => {
+  it('plugin source is a github source pointing to this repo', () => {
     const data = JSON.parse(fs.readFileSync(marketplacePath, 'utf8'));
-    assert.equal(data.plugins[0].source, '.');
+    const source = data.plugins[0].source;
+    assert.equal(source.source, 'github');
+    assert.equal(source.repo, 'mmizutani/claude-code-lsp-enforcement-kit');
   });
 });
 

@@ -6,7 +6,10 @@
   "plugins": [
     {
       "name": "lsp-enforcement-kit",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "mmizutani/claude-code-lsp-enforcement-kit"
+      },
       "description": "Physical enforcement of LSP-first navigation in Claude Code. Stop burning tokens on Grep."
     }
   ]

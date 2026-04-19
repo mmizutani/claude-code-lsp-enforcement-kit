@@ -256,11 +256,6 @@
       "oneOf": [
         {
           "type": "string",
-          "const": ".",
-          "description": "Plugin is at the marketplace root (self-referencing)"
-        },
-        {
-          "type": "string",
           "description": "Relative path to plugin directory (must start with ./)",
           "pattern": "^\\./[^.][^/]*(/[^/]+)*$",
           "examples": [

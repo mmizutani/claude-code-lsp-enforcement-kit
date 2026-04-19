@@ -30,16 +30,15 @@ describe('JSON schemas are valid', () => {
     assert.deepEqual(schema.required, ['name', 'owner', 'plugins']);
   });
 
-  it('marketplace schema accepts "." as a valid plugin source', () => {
+  it('marketplace schema accepts github source objects', () => {
     const raw = fs.readFileSync(
       path.join(SCHEMAS_DIR, 'claude-plugin-marketplace-manifest.schema.json'),
       'utf8',
     );
     const schema = JSON.parse(raw);
     const sourceOptions = schema.$defs.pluginSource.oneOf;
-    const dotOption = sourceOptions.find((opt) => opt.const === '.');
-    assert.ok(dotOption, 'pluginSource should accept "." as a valid source');
-    assert.equal(dotOption.type, 'string');
+    const githubRef = sourceOptions.find((opt) => opt.$ref === '#/$defs/githubSource');
+    assert.ok(githubRef, 'pluginSource should accept github source objects');
   });
 });
 
