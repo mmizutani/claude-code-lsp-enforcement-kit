@@ -25,7 +25,7 @@
  *   by extension or concept, not for symbol-based search.
  */
 
-const { buildSuggestion, buildStructuredBlockResponse } = require('./lib/detect-lsp-provider');
+const { buildSuggestion, buildStructuredBlockResponse } = require('./lib/detect-lsp-provider.cjs');
 
 let raw = '';
 process.stdin.setEncoding('utf8');

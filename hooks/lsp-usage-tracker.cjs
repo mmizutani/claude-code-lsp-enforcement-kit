@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { isLspProviderTool } = require('./lib/detect-lsp-provider');
+const { isLspProviderTool } = require('./lib/detect-lsp-provider.cjs');
 
 const STATE_DIR = path.join(os.homedir(), '.claude', 'state');
 

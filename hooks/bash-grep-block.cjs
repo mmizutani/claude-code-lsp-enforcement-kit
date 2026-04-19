@@ -6,7 +6,7 @@
 // Suggests LSP equivalent for the active provider (cclsp / Serena / ...).
 // Allows: git grep, non-code paths, non-code file types.
 
-const { buildSuggestion, buildStructuredBlockResponse } = require('./lib/detect-lsp-provider');
+const { buildSuggestion, buildStructuredBlockResponse } = require('./lib/detect-lsp-provider.cjs');
 
 // Zero-width / formatting chars that would split tokens invisibly and
 // bypass ASCII regex symbol detection.

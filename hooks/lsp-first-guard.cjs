@@ -4,7 +4,7 @@
 // lsp-first-guard.js — PreToolUse hook (matcher: Grep)
 // Blocks Grep on code symbols. Suggests LSP equivalent for the active provider.
 
-const { buildSuggestion, buildStructuredBlockResponse } = require('./lib/detect-lsp-provider');
+const { buildSuggestion, buildStructuredBlockResponse } = require('./lib/detect-lsp-provider.cjs');
 
 let raw = '';
 process.stdin.setEncoding('utf8');
