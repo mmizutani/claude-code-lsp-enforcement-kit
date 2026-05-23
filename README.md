@@ -17,7 +17,7 @@
   <a href="#-quick-start">Quick Start</a> &bull;
   <a href="#-the-problem">Why</a> &bull;
   <a href="#-token-savings-grep-vs-lsp-per-operation">Savings</a> &bull;
-  <a href="#-architecture-6-hooks--1-tracker">Architecture</a> &bull;
+  <a href="#-architecture-7-hooks--1-tracker">Architecture</a> &bull;
   <a href="#-how-each-hook-works">Hooks</a> &bull;
   <a href="CHANGELOG.md">Changelog</a>
 </p>
@@ -71,7 +71,7 @@ Install as a [Claude Code plugin](https://code.claude.com/docs/en/plugins) — n
 /plugin install lsp-enforcement-kit@claude-code-lsp-enforcement-kit
 ```
 
-Restart Claude Code. Done. All seven hooks register automatically, the LSP-first rule injects on session start, and the kit picks up `cclsp` / Serena from your existing MCP config.
+Restart Claude Code. Done. The full hook chain (7 enforcement guards + 1 post-tool-use tracker = 8 `.cjs` scripts) registers automatically, the LSP-first rule injects on session start, and the kit picks up `cclsp` / Serena from your existing MCP config.
 
 Uninstall: `/plugin uninstall lsp-enforcement-kit@claude-code-lsp-enforcement-kit` — everything goes away cleanly, no leftover files in `~/.claude/hooks/`.
 
@@ -352,7 +352,7 @@ Agent({
 
 ### 6. `lsp-session-reset.cjs` — Stale State Wiper
 
-**Hook type:** SessionStart | **Matcher:** `true` (runs on every session start)
+**Hook type:** SessionStart | **Matcher:** *(empty — SessionStart fires once per session regardless of matcher)*
 
 The Read guard's state file (`~/.claude/state/lsp-ready-<cwd-hash>`) has a 24-hour expiry. Without this hook, a new session inherits yesterday's `nav_count` — and if that count was ≥ 2, the guard is permanently in **surgical mode** for today's session: unlimited Reads with zero LSP calls required. A full bypass of the enforcement chain.
 
@@ -415,25 +415,28 @@ Tracks successful LSP calls in a per-project state file. Other hooks read this s
 /plugin install lsp-enforcement-kit@claude-code-lsp-enforcement-kit
 ```
 
-That's it. Claude Code clones this repo into its plugin cache, registers all seven hooks via `hooks/hooks.json`, and injects the LSP-first rule on each new session. No files are written to `~/.claude/hooks/`, and your `~/.claude/settings.json` is not modified beyond the standard `enabledPlugins` toggle.
+That's it. Claude Code clones this repo into its plugin cache, registers the full hook chain (7 enforcement guards + 1 tracker = 8 `.cjs` scripts) via `hooks/hooks.json`, and injects the LSP-first rule on each new session. No files are written to `~/.claude/hooks/`, and your `~/.claude/settings.json` is not modified beyond the standard `enabledPlugins` toggle.
 
 Update to a new release: `/plugin marketplace update claude-code-lsp-enforcement-kit`.
 
 ### Local development install
 
-When iterating on the kit itself, install from a local clone instead of GitHub:
+When iterating on the kit itself, point Claude Code at your local clone instead of the marketplace cache:
 
 ```bash
 git clone https://github.com/mmizutani/claude-code-lsp-enforcement-kit.git
 cd claude-code-lsp-enforcement-kit
+claude --plugin-dir .
 ```
+
+`--plugin-dir` loads `.claude-plugin/plugin.json` from the given directory each time the session starts, so editing a `.cjs` and re-launching is the dev loop. The marketplace entry in this repo's `.claude-plugin/marketplace.json` uses a GitHub source, so `/plugin marketplace add ./` would still install the published v3.0.0 tag — not your working tree.
+
+After verifying the dev build, you can validate the full marketplace install path separately:
 
 ```text
 /plugin marketplace add ./
 /plugin install lsp-enforcement-kit@claude-code-lsp-enforcement-kit
 ```
-
-Hooks reload on every Claude Code session start — edit a `.cjs`, restart, see the change.
 
 ### Disable or uninstall
 

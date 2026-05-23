@@ -10,8 +10,8 @@
     "validate": "npm run validate:marketplace && npm run validate:plugin"
   },
   "devDependencies": {
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1"
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1"
   },
   "engines": {
     "node": ">=18"

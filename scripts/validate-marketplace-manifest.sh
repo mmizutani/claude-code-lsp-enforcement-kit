@@ -11,13 +11,16 @@ schema_path="${repo_root}/schemas/claude-plugin-marketplace-manifest.schema.json
 marketplace_json="${repo_root}/.claude-plugin/marketplace.json"
 
 echo "Validating Marketplace manifest (.claude-plugin/marketplace.json)"
-claude plugin validate "${repo_root}"
 
-# Ensure local ajv is available (npm install once per clone). On a clean
-# checkout this runs in a few seconds; afterwards it's a no-op.
-if [ ! -d "${repo_root}/node_modules/ajv" ]; then
-  echo "Installing ajv & ajv-formats (one-time)..."
-  (cd "${repo_root}" && npm install --silent --no-audit --no-fund)
+# When marketplace.json is present alongside plugin.json, the CLI validates
+# the marketplace (confirmed by inspecting the CLI's output line, which
+# always says "Validating marketplace manifest" in that case). So running
+# the unstaged repo here is the correct call for marketplace validation.
+claude plugin validate --strict "${repo_root}"
+
+if ! node -e "require.resolve('ajv/dist/2020'); require.resolve('ajv-formats')" >/dev/null 2>&1; then
+  echo "Missing dev deps. Run: npm ci --ignore-scripts --no-audit --no-fund" >&2
+  exit 1
 fi
 
 node "${repo_root}/scripts/validate-manifest.cjs" "${schema_path}" "${marketplace_json}"

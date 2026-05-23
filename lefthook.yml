@@ -1,5 +1,12 @@
 # Lefthook configuration for claude-code-lsp-enforcement-kit
 # https://github.com/evilmartians/lefthook
+#
+# These commands assume the repo's devDependencies are already installed
+# (`npm ci --ignore-scripts --no-audit --no-fund`). The validate scripts no
+# longer auto-install — running them in parallel against a clean checkout
+# would race on the same node_modules. lefthook can be configured to
+# bootstrap once via `lefthook install --no-tty` followed by `npm ci`,
+# typically wired into the team's onboarding script.
 
 pre-commit:
   parallel: true
@@ -9,9 +16,9 @@ pre-commit:
       run: ./scripts/validate-marketplace-manifest.sh
 
     validate-plugin-manifest:
-      glob: "{.claude-plugin/plugin.json,schemas/claude-plugin-manifest.schema.json}"
+      glob: "{.claude-plugin/plugin.json,schemas/claude-plugin-manifest.schema.json,hooks/**/*.cjs,hooks/hooks.json}"
       run: ./scripts/validate-plugin-manifest.sh
 
     run-tests:
-      glob: "{hooks/*.cjs,hooks/lib/*.cjs,tests/*.test.cjs,.claude-plugin/*.json,hooks/hooks.json,rules/*.md}"
+      glob: "{hooks/*.cjs,hooks/lib/*.cjs,tests/*.test.cjs,.claude-plugin/*.json,hooks/hooks.json,rules/*.md,scripts/*.cjs}"
       run: node --test 'tests/*.test.cjs'
