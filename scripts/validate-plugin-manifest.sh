@@ -20,9 +20,11 @@ plugin_json="${repo_root}/.claude-plugin/plugin.json"
 echo "Validating Plugin manifest (.claude-plugin/plugin.json)"
 
 # Verify devDependencies are present. We do not auto-install (lefthook may
-# run validate scripts in parallel, racing on the same node_modules).
-if ! node -e "require.resolve('ajv/dist/2020'); require.resolve('ajv-formats')" >/dev/null 2>&1; then
-  echo "Missing dev deps. Run: npm ci --ignore-scripts --no-audit --no-fund" >&2
+# run validate scripts in parallel, racing on the same node_modules). Anchor
+# `require.resolve` to repo_root so the check works when called from outside
+# the repo by absolute path.
+if ! (cd "${repo_root}" && node -e "require.resolve('ajv/dist/2020'); require.resolve('ajv-formats')") >/dev/null 2>&1; then
+  echo "Missing dev deps in ${repo_root}/node_modules. Run: npm ci --ignore-scripts --no-audit --no-fund" >&2
   exit 1
 fi
 
@@ -36,10 +38,21 @@ trap 'rm -rf "${tmp_root}"' EXIT
 plugin_tree="${tmp_root}/plugin"
 mkdir -p "${plugin_tree}/.claude-plugin"
 cp "${plugin_json}" "${plugin_tree}/.claude-plugin/plugin.json"
+
+# Reject any symlinks inside the plugin payload before staging. `cp -R`
+# preserves symlinks, and `claude plugin validate` follows them — a broken
+# or external symlink would silently pass validation.
 for d in hooks rules; do
-  if [ -d "${repo_root}/${d}" ]; then
-    cp -R "${repo_root}/${d}" "${plugin_tree}/${d}"
+  src="${repo_root}/${d}"
+  [ -d "${src}" ] || continue
+
+  if find "${src}" -type l -print -quit | grep -q .; then
+    echo "Symlinks are not allowed in plugin payload: ${d}/" >&2
+    find "${src}" -type l -print >&2
+    exit 1
   fi
+
+  cp -R "${src}" "${plugin_tree}/${d}"
 done
 
 claude plugin validate --strict "${plugin_tree}"

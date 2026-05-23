@@ -18,8 +18,8 @@ echo "Validating Marketplace manifest (.claude-plugin/marketplace.json)"
 # the unstaged repo here is the correct call for marketplace validation.
 claude plugin validate --strict "${repo_root}"
 
-if ! node -e "require.resolve('ajv/dist/2020'); require.resolve('ajv-formats')" >/dev/null 2>&1; then
-  echo "Missing dev deps. Run: npm ci --ignore-scripts --no-audit --no-fund" >&2
+if ! (cd "${repo_root}" && node -e "require.resolve('ajv/dist/2020'); require.resolve('ajv-formats')") >/dev/null 2>&1; then
+  echo "Missing dev deps in ${repo_root}/node_modules. Run: npm ci --ignore-scripts --no-audit --no-fund" >&2
   exit 1
 fi
 

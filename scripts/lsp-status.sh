@@ -53,34 +53,30 @@ SCOPE=""
 VERSION=""
 
 # ── 1. Authoritative lookup via `claude plugin list --json` ────────────────
+# We pipe the JSON into a Node helper and read 4 newline-separated raw values
+# with `read -r`. Crucially: no `eval`, no JSON.stringify (JSON escaping is
+# not shell escaping — `$(...)`/backticks in a value would still expand).
 if command -v claude >/dev/null 2>&1; then
-  # shellcheck disable=SC2034
-  PLUGIN_QUERY="$(claude plugin list --json 2>/dev/null || true)"
-  if [ -n "${PLUGIN_QUERY}" ]; then
-    eval "$(printf '%s' "${PLUGIN_QUERY}" | PLUGIN_ID="${PLUGIN_ID}" node -e "
-      let raw = '';
-      process.stdin.on('data', c => raw += c);
-      process.stdin.on('end', () => {
-        const id = process.env.PLUGIN_ID;
-        let entry;
-        try {
-          entry = JSON.parse(raw).find(e => e && e.id === id);
-        } catch { /* ignore */ }
-        // Emit shell-safe assignments — every value passed through JSON.stringify
-        // so even surprising IDs / paths can't escape into the shell.
-        const out = entry
-          ? {
-              PLUGIN_ROOT: typeof entry.installPath === 'string' ? entry.installPath : '',
-              ENABLED_STATUS: entry.enabled === true ? 'enabled' : entry.enabled === false ? 'disabled' : 'missing',
-              SCOPE: typeof entry.scope === 'string' ? entry.scope : '',
-              VERSION: typeof entry.version === 'string' ? entry.version : '',
-            }
-          : { PLUGIN_ROOT: '', ENABLED_STATUS: 'missing', SCOPE: '', VERSION: '' };
-        for (const [k, v] of Object.entries(out)) {
-          process.stdout.write(\`\${k}=\${JSON.stringify(v)}\\n\`);
-        }
-      });
-    ")"
+  if PLUGIN_QUERY="$(claude plugin list --json 2>/dev/null)"; then
+    if plugin_lookup="$(printf '%s' "${PLUGIN_QUERY}" \
+        | node "${SCRIPT_DIR}/find-installed-plugin.cjs" "${PLUGIN_ID}" 2>/dev/null)"; then
+      :
+    else
+      plugin_lookup=""
+    fi
+    if [ -n "${plugin_lookup}" ]; then
+      # `read -r` consumes one line per call. The helper guarantees control
+      # chars (NUL/CR/LF) are stripped from each emitted value so we never
+      # get extra lines.
+      {
+        IFS= read -r PLUGIN_ROOT || PLUGIN_ROOT=""
+        IFS= read -r ENABLED_STATUS || ENABLED_STATUS="missing"
+        IFS= read -r SCOPE || SCOPE=""
+        IFS= read -r VERSION || VERSION=""
+      } <<EOF
+${plugin_lookup}
+EOF
+    fi
   fi
 fi
 
@@ -92,14 +88,12 @@ if [ -z "${PLUGIN_ROOT}" ] && [ -f "${CLAUDE_DIR}/settings.json" ]; then
     VERSION="${PLUGIN_ROOT##*/}"
     SCOPE="user(fallback)"
   fi
-  ENABLED_STATUS="$(PLUGIN_ID="${PLUGIN_ID}" node -e "
-    const fs = require('fs');
-    try {
-      const s = JSON.parse(fs.readFileSync('${CLAUDE_DIR}/settings.json', 'utf8'));
-      const v = (s.enabledPlugins || {})[process.env.PLUGIN_ID];
-      process.stdout.write(v === true ? 'enabled' : v === false ? 'disabled' : 'missing');
-    } catch { process.stdout.write('missing'); }
-  " 2>/dev/null || echo missing)"
+  if status_out="$(node "${SCRIPT_DIR}/check-enabled-plugin.cjs" "${CLAUDE_DIR}/settings.json" "${PLUGIN_ID}" 2>/dev/null)"; then
+    ENABLED_STATUS="${status_out%$'\n'}"
+  else
+    ENABLED_STATUS="${status_out%$'\n'}"
+    [ -z "${ENABLED_STATUS}" ] && ENABLED_STATUS="missing"
+  fi
 fi
 
 if [ -z "${PLUGIN_ROOT}" ] || [ ! -d "${PLUGIN_ROOT}" ]; then

@@ -19,6 +19,12 @@ pre-commit:
       glob: "{.claude-plugin/plugin.json,schemas/claude-plugin-manifest.schema.json,hooks/**/*.cjs,hooks/hooks.json}"
       run: ./scripts/validate-plugin-manifest.sh
 
+    shell-syntax:
+      # Catch typos / unbalanced quotes / unclosed heredocs before they ship.
+      # `bash -n` is parse-only — no commands run, no side effects.
+      glob: "scripts/*.sh"
+      run: bash -n {staged_files}
+
     run-tests:
-      glob: "{hooks/*.cjs,hooks/lib/*.cjs,tests/*.test.cjs,.claude-plugin/*.json,hooks/hooks.json,rules/*.md,scripts/*.cjs}"
+      glob: "{hooks/*.cjs,hooks/lib/*.cjs,tests/*.test.cjs,.claude-plugin/*.json,hooks/hooks.json,rules/*.md,scripts/*.cjs,scripts/*.sh,package*.json}"
       run: node --test 'tests/*.test.cjs'
