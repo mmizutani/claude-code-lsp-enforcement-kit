@@ -56,32 +56,46 @@ VERSION=""
 # We pipe the JSON into a Node helper and read 4 newline-separated raw values
 # with `read -r`. Crucially: no `eval`, no JSON.stringify (JSON escaping is
 # not shell escaping — `$(...)`/backticks in a value would still expand).
+#
+# Helper exit codes drive how we treat the result:
+#   0 → plugin found, values printed → use them, skip fallback
+#   1 → plugin authoritatively NOT in list → use the "missing" payload, skip
+#       fallback (we trust the CLI; an out-of-date cache must not mask this)
+#   2 → input wasn't valid JSON (CLI broken / misformatted) → fall through
+#   *  → CLI itself unavailable / unreadable → fall through
+cli_consulted=0
 if command -v claude >/dev/null 2>&1; then
   if PLUGIN_QUERY="$(claude plugin list --json 2>/dev/null)"; then
-    if plugin_lookup="$(printf '%s' "${PLUGIN_QUERY}" \
-        | node "${SCRIPT_DIR}/find-installed-plugin.cjs" "${PLUGIN_ID}" 2>/dev/null)"; then
-      :
-    else
-      plugin_lookup=""
-    fi
-    if [ -n "${plugin_lookup}" ]; then
-      # `read -r` consumes one line per call. The helper guarantees control
-      # chars (NUL/CR/LF) are stripped from each emitted value so we never
-      # get extra lines.
-      {
-        IFS= read -r PLUGIN_ROOT || PLUGIN_ROOT=""
-        IFS= read -r ENABLED_STATUS || ENABLED_STATUS="missing"
-        IFS= read -r SCOPE || SCOPE=""
-        IFS= read -r VERSION || VERSION=""
-      } <<EOF
+    plugin_lookup="$(printf '%s' "${PLUGIN_QUERY}" \
+      | node "${SCRIPT_DIR}/find-installed-plugin.cjs" "${PLUGIN_ID}" 2>/dev/null)" \
+      && lookup_rc=0 || lookup_rc=$?
+
+    case "${lookup_rc}" in
+      0|1)
+        # Authoritative result. Consume the 4 lines even when status=missing
+        # so PLUGIN_ROOT correctly remains empty and we skip the fallback.
+        {
+          IFS= read -r PLUGIN_ROOT || PLUGIN_ROOT=""
+          IFS= read -r ENABLED_STATUS || ENABLED_STATUS="missing"
+          IFS= read -r SCOPE || SCOPE=""
+          IFS= read -r VERSION || VERSION=""
+        } <<EOF
 ${plugin_lookup}
 EOF
-    fi
+        cli_consulted=1
+        ;;
+      *)
+        # JSON parse failure or some other helper-internal error.
+        # Treat this the same as "CLI unavailable" — fall through to scan.
+        ;;
+    esac
   fi
 fi
 
-# Fallback: scan ~/.claude/settings.json if the CLI lookup didn't yield anything.
-if [ -z "${PLUGIN_ROOT}" ] && [ -f "${CLAUDE_DIR}/settings.json" ]; then
+# Fallback: only when the authoritative CLI lookup couldn't be made.
+# A successful CLI lookup that *says* the plugin is missing must NOT be
+# overridden by a stale ~/.claude/plugins/cache entry from a prior install.
+if [ "${cli_consulted}" -eq 0 ] && [ -f "${CLAUDE_DIR}/settings.json" ]; then
   PLUGIN_ROOT_BASE="${CLAUDE_DIR}/plugins/cache/${MARKETPLACE_NAME}/${PLUGIN_NAME}"
   if [ -d "${PLUGIN_ROOT_BASE}" ]; then
     PLUGIN_ROOT="$(find "${PLUGIN_ROOT_BASE}" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
