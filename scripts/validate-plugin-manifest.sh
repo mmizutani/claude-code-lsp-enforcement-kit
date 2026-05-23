@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Validate .claude-plugin/plugin.json against the JSON Schema.
-# Two-stage: claude plugin validate (CLI) + ajv (schema).
+# Validate .claude-plugin/plugin.json.
+# Two-stage: (1) `claude plugin validate` (official semantic checks)
+#            (2) inline ajv2020 via scripts/validate-manifest.cjs (schema-level).
 
 set -euo pipefail
 
@@ -12,21 +13,9 @@ plugin_json="${repo_root}/.claude-plugin/plugin.json"
 echo "Validating Plugin manifest (.claude-plugin/plugin.json)"
 claude plugin validate "${repo_root}"
 
-# Use npx or pnpm dlx, whichever is available
-if command -v pnpm >/dev/null 2>&1; then
-  pnpm dlx -p ajv-cli -p ajv-formats ajv validate \
-    --spec=draft2020 \
-    -s "${schema_path}" \
-    -d "${plugin_json}" \
-    --all-errors \
-    --errors=text \
-    -c ajv-formats
-else
-  npx -y -p ajv-cli@latest -p ajv-formats@latest ajv validate \
-    --spec=draft2020 \
-    -s "${schema_path}" \
-    -d "${plugin_json}" \
-    --all-errors \
-    --errors=text \
-    -c ajv-formats
+if [ ! -d "${repo_root}/node_modules/ajv" ]; then
+  echo "Installing ajv & ajv-formats (one-time)..."
+  (cd "${repo_root}" && npm install --silent --no-audit --no-fund)
 fi
+
+node "${repo_root}/scripts/validate-manifest.cjs" "${schema_path}" "${plugin_json}"

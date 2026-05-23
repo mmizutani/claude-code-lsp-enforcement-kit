@@ -35,6 +35,12 @@
         "acme-tools"
       ]
     },
+    "description": {
+      "type": "string",
+      "description": "Short, public-facing marketplace summary shown by `claude plugin search` and Claude Code's plugin UI. The CLI emits a warning if missing.",
+      "minLength": 1,
+      "maxLength": 500
+    },
     "owner": {
       "$ref": "#/$defs/owner",
       "description": "Marketplace maintainer information"

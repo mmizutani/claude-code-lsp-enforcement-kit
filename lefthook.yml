@@ -6,29 +6,11 @@ pre-commit:
   commands:
     validate-marketplace-manifest:
       glob: "{.claude-plugin/marketplace.json,schemas/claude-plugin-marketplace-manifest.schema.json}"
-      run: |
-        echo "Validating Marketplace manifest..."
-        claude plugin validate . && \
-        npx -y -p ajv-cli@latest -p ajv-formats@latest ajv validate \
-          --spec=draft2020 \
-          -s schemas/claude-plugin-marketplace-manifest.schema.json \
-          -d .claude-plugin/marketplace.json \
-          --all-errors \
-          --errors=text \
-          -c ajv-formats
+      run: ./scripts/validate-marketplace-manifest.sh
 
     validate-plugin-manifest:
       glob: "{.claude-plugin/plugin.json,schemas/claude-plugin-manifest.schema.json}"
-      run: |
-        echo "Validating Plugin manifest..."
-        claude plugin validate . && \
-        npx -y -p ajv-cli@latest -p ajv-formats@latest ajv validate \
-          --spec=draft2020 \
-          -s schemas/claude-plugin-manifest.schema.json \
-          -d .claude-plugin/plugin.json \
-          --all-errors \
-          --errors=text \
-          -c ajv-formats
+      run: ./scripts/validate-plugin-manifest.sh
 
     run-tests:
       glob: "{hooks/*.cjs,hooks/lib/*.cjs,tests/*.test.cjs,.claude-plugin/*.json,hooks/hooks.json,rules/*.md}"

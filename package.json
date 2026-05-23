@@ -1,0 +1,20 @@
+{
+  "name": "claude-code-lsp-enforcement-kit",
+  "private": true,
+  "version": "3.0.0",
+  "description": "Dev-only manifest: hosts validation tooling (ajv) and the node:test runner. The Claude Code plugin itself ships from .claude-plugin/plugin.json and needs no Node deps at install time.",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "validate:plugin": "node scripts/validate-manifest.cjs schemas/claude-plugin-manifest.schema.json .claude-plugin/plugin.json",
+    "validate:marketplace": "node scripts/validate-manifest.cjs schemas/claude-plugin-marketplace-manifest.schema.json .claude-plugin/marketplace.json",
+    "validate": "npm run validate:marketplace && npm run validate:plugin"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
