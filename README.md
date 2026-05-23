@@ -452,7 +452,15 @@ You: Run Grep("handleSubmit") on src/
 Claude: ⛔ LSP-FIRST BLOCK — code symbols in Grep, use mcp__cclsp__find_references("handleSubmit") instead
 ```
 
-Inspect runtime state (after at least one session with the plugin loaded):
+Inspect the full install (recommended one-liner):
+
+```bash
+bash ~/.claude/plugins/cache/claude-code-lsp-enforcement-kit/lsp-enforcement-kit/*/scripts/lsp-status.sh
+```
+
+This checks: plugin cache present → enabledPlugins entry → all 8 hook scripts intact → shared helper resolves → at least one LSP MCP provider detected → current-cwd runtime state. Exits non-zero if anything is off, with the exact command to fix it.
+
+Or peek at the raw runtime state for the cwd you're in:
 
 ```bash
 ls ~/.claude/state/lsp-ready-*    # one flag file per cwd you've worked in
