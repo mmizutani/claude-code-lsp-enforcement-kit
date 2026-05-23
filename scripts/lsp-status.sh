@@ -98,9 +98,16 @@ fi
 if [ "${cli_consulted}" -eq 0 ] && [ -f "${CLAUDE_DIR}/settings.json" ]; then
   PLUGIN_ROOT_BASE="${CLAUDE_DIR}/plugins/cache/${MARKETPLACE_NAME}/${PLUGIN_NAME}"
   if [ -d "${PLUGIN_ROOT_BASE}" ]; then
-    PLUGIN_ROOT="$(find "${PLUGIN_ROOT_BASE}" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-    VERSION="${PLUGIN_ROOT##*/}"
-    SCOPE="user(fallback)"
+    # `sort -V` exists on macOS BSD sort (10.7+) and GNU coreutils — both
+    # current Claude Code targets. If a version directory exists at all,
+    # the find/sort/tail chain returns the newest. We still defend against
+    # an empty result (cache base exists but no version subdir was created).
+    candidate="$(find "${PLUGIN_ROOT_BASE}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)"
+    if [ -n "${candidate}" ] && [ -d "${candidate}" ]; then
+      PLUGIN_ROOT="${candidate}"
+      VERSION="${PLUGIN_ROOT##*/}"
+      SCOPE="user(fallback)"
+    fi
   fi
   if status_out="$(node "${SCRIPT_DIR}/check-enabled-plugin.cjs" "${CLAUDE_DIR}/settings.json" "${PLUGIN_ID}" 2>/dev/null)"; then
     ENABLED_STATUS="${status_out%$'\n'}"

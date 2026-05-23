@@ -29,9 +29,10 @@ try {
   Ajv2020 = require('ajv/dist/2020');
   addFormats = require('ajv-formats');
 } catch (err) {
-  console.error('Missing dependencies. Install with:');
-  console.error('  npm install --no-save --prefix "$(mktemp -d)" ajv ajv-formats');
-  console.error('or rely on the `npm exec` wrapper in scripts/validate-*-manifest.sh.');
+  console.error('Missing dev dependencies (ajv, ajv-formats).');
+  console.error('Install from the repo root with:');
+  console.error('  npm ci --ignore-scripts --no-audit --no-fund');
+  console.error('(or `npm install` on a clean checkout without a lockfile yet).');
   console.error('');
   console.error('Underlying error:', err.message);
   process.exit(1);

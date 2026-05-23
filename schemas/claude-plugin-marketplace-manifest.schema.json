@@ -37,7 +37,7 @@
     },
     "description": {
       "type": "string",
-      "description": "Short, public-facing marketplace summary shown by `claude plugin search` and Claude Code's plugin UI. The CLI emits a warning if missing.",
+      "description": "Short, public-facing marketplace summary. This is the authoritative description: it is what `claude plugin validate` warns about when missing, and what the CLI/UI surfaces in `claude plugin search` output. Prefer this field over `metadata.description` — when both are present, `description` takes precedence; `metadata.description` is kept as a legacy/internal note and may be removed in a future schema revision.",
       "minLength": 1,
       "maxLength": 500
     },
@@ -108,7 +108,7 @@
       "properties": {
         "description": {
           "type": "string",
-          "description": "Brief marketplace description",
+          "description": "Legacy / internal-use marketplace description. The top-level `description` (sibling of `name`/`owner`/`plugins`) is the authoritative public-facing summary surfaced by the CLI; when both fields are present the top-level one wins. Prefer setting the top-level field instead. This nested field is retained for backward compatibility and may be removed in a future schema revision.",
           "maxLength": 500
         },
         "version": {
