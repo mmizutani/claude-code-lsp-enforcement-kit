@@ -1,0 +1,116 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * print-runtime-state.cjs — read a per-cwd state flag and print formatted lines.
+ *
+ * Used by scripts/lsp-status.sh in place of `eval "$(node -e ...)"`, which is
+ * unsafe: any value that landed in ~/.claude/state/lsp-ready-<hash> would
+ * have been re-injected into the bash shell. Now the JSON values are kept
+ * inside Node and only printable, type-coerced strings reach stdout.
+ *
+ * Usage:
+ *   node scripts/print-runtime-state.cjs <flag-file> [color|no-color]
+ *
+ * Exit code:
+ *   0  flag exists and parsed
+ *   1  flag missing or unreadable (script prints a "no state" sentinel line)
+ *
+ * NOTE: all control characters are sourced via String.fromCharCode and
+ * RegExp constructors so this file stays plain ASCII text in git. Embedding
+ * literal ESC / NUL bytes would have made `git diff` report it as binary
+ * and review tooling would skip it.
+ */
+
+const fs = require('fs');
+
+const flagPath = process.argv[2];
+const colorMode = (process.argv[3] || 'no-color') === 'color';
+
+if (!flagPath) {
+  process.stderr.write('Usage: print-runtime-state.cjs <flag-file> [color|no-color]\n');
+  process.exit(2);
+}
+
+const ESC = String.fromCharCode(0x1b);
+const C = colorMode
+  ? {
+      green: ESC + '[32m',
+      red: ESC + '[31m',
+      yellow: ESC + '[33m',
+      dim: ESC + '[2m',
+      reset: ESC + '[0m',
+    }
+  : { green: '', red: '', yellow: '', dim: '', reset: '' };
+
+// Strip ASCII control characters (0x00..0x1F and DEL 0x7F).
+const CTRL = new RegExp('[\\x00-\\x1f\\x7f]', 'g');
+
+function pad(label) {
+  return `  ${label}${' '.repeat(Math.max(0, 21 - label.length))}`;
+}
+
+function clampInt(value) {
+  return Number.isSafeInteger(value) ? value : 0;
+}
+
+function clampString(value) {
+  if (typeof value !== 'string') return '(none)';
+  return value.replace(CTRL, '').slice(0, 120) || '(none)';
+}
+
+function emit(lines) {
+  for (const line of lines) process.stdout.write(`${line}\n`);
+}
+
+if (!fs.existsSync(flagPath)) {
+  emit([
+    `  ${C.dim}No state file for this cwd yet. The next Read of a code file will trigger Gate 1 warmup.${C.reset}`,
+    `  ${C.dim}Expected path: ${flagPath}${C.reset}`,
+    'STATUS=missing',
+  ]);
+  process.exit(1);
+}
+
+let data;
+try {
+  data = JSON.parse(fs.readFileSync(flagPath, 'utf8'));
+} catch (err) {
+  const reason = String(err && err.message ? err.message : err).replace(CTRL, '');
+  emit([
+    `  ${C.red}State file present but unparseable:${C.reset} ${flagPath}`,
+    `  ${C.dim}Reason: ${reason}${C.reset}`,
+    'STATUS=invalid',
+  ]);
+  process.exit(1);
+}
+
+const warmupDone = data && data.warmup_done === true;
+const navCount = clampInt(data && data.nav_count);
+const readCount = clampInt(data && data.read_count);
+const lastTool = clampString(data && data.last_tool);
+const ts = clampInt(data && data.timestamp);
+const ageMin = ts > 0 ? Math.round((Date.now() - ts) / 60000) : 0;
+
+const lines = [
+  `${pad('Warmup done:')}${warmupDone ? 'yes' : 'no'}`,
+  `${pad('nav_count:')}${navCount} ${C.dim}(LSP navigation calls)${C.reset}`,
+  `${pad('read_count:')}${readCount} ${C.dim}(unique code files Read)${C.reset}`,
+  `${pad('Last tool:')}${lastTool} ${C.dim}(${ageMin} min ago)${C.reset}`,
+  `${pad('Flag file:')}${C.dim}${flagPath}${C.reset}`,
+  '',
+];
+
+if (warmupDone && navCount >= 2) {
+  lines.push(`  ${C.green}OK${C.reset} Surgical mode active — all Reads unlimited for this session.`);
+} else if (warmupDone && navCount >= 1) {
+  lines.push(`  ${C.yellow}!${C.reset} Gate 4 open (Reads 4-5 allowed). One more LSP nav call to unlock surgical mode.`);
+} else if (warmupDone) {
+  lines.push(`  ${C.yellow}!${C.reset} Warmup done, 0 nav calls. Gate 3 warns / Gate 4 blocks on next Reads.`);
+} else {
+  lines.push(`  ${C.yellow}!${C.reset} Not warmed up. Gate 1 will block the first Read of a code file.`);
+}
+
+lines.push('STATUS=ready');
+emit(lines);
+process.exit(0);

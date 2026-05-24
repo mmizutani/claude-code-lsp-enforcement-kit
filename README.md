@@ -7,17 +7,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nesaminua/claude-code-lsp-enforcement-kit/releases"><img src="https://img.shields.io/github/v/release/nesaminua/claude-code-lsp-enforcement-kit?style=for-the-badge&color=6366f1" alt="Release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/nesaminua/claude-code-lsp-enforcement-kit?style=for-the-badge&color=10b981" alt="License"></a>
-  <a href="https://github.com/nesaminua/claude-code-lsp-enforcement-kit/stargazers"><img src="https://img.shields.io/github/stars/nesaminua/claude-code-lsp-enforcement-kit?style=for-the-badge&color=f59e0b" alt="Stars"></a>
-  <img src="https://img.shields.io/badge/Claude%20Code-compatible-8b5cf6?style=for-the-badge" alt="Claude Code compatible">
+  <a href="https://github.com/mmizutani/claude-code-lsp-enforcement-kit/releases"><img src="https://img.shields.io/github/v/release/mmizutani/claude-code-lsp-enforcement-kit?style=for-the-badge&color=6366f1" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/mmizutani/claude-code-lsp-enforcement-kit?style=for-the-badge&color=10b981" alt="License"></a>
+  <a href="https://github.com/mmizutani/claude-code-lsp-enforcement-kit/stargazers"><img src="https://img.shields.io/github/stars/mmizutani/claude-code-lsp-enforcement-kit?style=for-the-badge&color=f59e0b" alt="Stars"></a>
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-8b5cf6?style=for-the-badge" alt="Claude Code plugin">
 </p>
 
 <p align="center">
   <a href="#-quick-start">Quick Start</a> &bull;
   <a href="#-the-problem">Why</a> &bull;
   <a href="#-token-savings-grep-vs-lsp-per-operation">Savings</a> &bull;
-  <a href="#-architecture-6-hooks--1-tracker">Architecture</a> &bull;
+  <a href="#-architecture-7-hooks--1-tracker">Architecture</a> &bull;
   <a href="#-how-each-hook-works">Hooks</a> &bull;
   <a href="CHANGELOG.md">Changelog</a>
 </p>
@@ -64,20 +64,16 @@ No generic advice. Every block message is parametrized by the actual file Claude
 
 ## ⚡ Quick Start
 
-```bash
-git clone https://github.com/nesaminua/claude-code-lsp-enforcement-kit.git
-cd claude-code-lsp-enforcement-kit
-bash install.sh
-# Windows: pwsh ./install.ps1
+Install as a [Claude Code plugin](https://code.claude.com/docs/en/plugins) — no file copying, no settings.json surgery:
+
+```text
+/plugin marketplace add mmizutani/claude-code-lsp-enforcement-kit
+/plugin install lsp-enforcement-kit@claude-code-lsp-enforcement-kit
 ```
 
-Restart Claude Code. Done. The installer is idempotent — safe to re-run on upgrades.
+Restart Claude Code. Done. The full hook chain (7 enforcement guards + 1 post-tool-use tracker = 8 `.cjs` scripts) registers automatically, the LSP-first rule injects on session start, and the kit picks up `cclsp` / Serena from your existing MCP config.
 
-Verify:
-
-```bash
-bash scripts/lsp-status.sh
-```
+Uninstall: `/plugin uninstall lsp-enforcement-kit@claude-code-lsp-enforcement-kit` — everything goes away cleanly, no leftover files in `~/.claude/hooks/`.
 
 ---
 
@@ -145,58 +141,63 @@ v2.1 introduces **provider-aware block messages**. The kit detects which LSP MCP
 - **Both installed** — suggestions show entries for both providers.
 - **Neither installed** — generic fallback with install hints for both.
 
-Detection reads user-level Claude Code config (`~/.claude.json`, `~/.claude/settings.json`) and matches known server names. The shared helper is in `hooks/lib/detect-lsp-provider.js` — adding a new provider means adding one entry to its `PROVIDERS` registry, with no changes to the individual hooks.
+Detection reads user-level Claude Code config (`~/.claude.json`, `~/.claude/settings.json`) and matches known server names. The shared helper is in [`hooks/lib/detect-lsp-provider.cjs`](hooks/lib/detect-lsp-provider.cjs) — adding a new provider means adding one entry to its `PROVIDERS` registry, with no changes to the individual hooks.
 
-## 🏗️ Architecture: 6 Hooks + 1 Tracker
+## 🏗️ Architecture: 7 Hooks + 1 Tracker
+
+Every hook is registered in [`hooks/hooks.json`](hooks/hooks.json) and resolved via `${CLAUDE_PLUGIN_ROOT}` so the plugin runs from any install location.
 
 ```
-                    PreToolUse                          PostToolUse
-                    ──────────                          ───────────
+                    PreToolUse                           PostToolUse
+                    ──────────                           ───────────
 
- Grep call ──→ [lsp-first-guard.js] ──→ BLOCK
+ Grep call ──→ [lsp-first-guard.cjs] ──→ BLOCK
                   detects code symbols,
                   suggests LSP equivalent
 
- Glob call ──→ [lsp-first-glob-guard.js] ──→ BLOCK
+ Glob call ──→ [lsp-first-glob-guard.cjs] ──→ BLOCK
                   blocks *UserService*, **/handleFoo*.ts;
                   allows *.ts, *subdomain*, src/**
 
- Bash(grep) ──→ [bash-grep-block.js] ──→ BLOCK
+ Bash(grep) ──→ [bash-grep-block.cjs] ──→ BLOCK
                   catches grep/rg/ag/ack
                   in shell commands
 
- Read(.tsx) ──→ [lsp-first-read-guard.js] ──→ GATE
+ Read(.tsx) ──→ [lsp-first-read-guard.cjs] ──→ GATE
                   5 progressive gates
                   (warmup → orient → nav → surgical)
 
- Agent(impl) ─→ [lsp-pre-delegation.js] ──→ BLOCK
+ Agent(impl) ─→ [lsp-pre-delegation.cjs] ──→ BLOCK
                   subagents can't access MCP,
                   orchestrator must pre-resolve
 
- LSP call ─────────────────────────────────────→ [lsp-usage-tracker.js]
+ LSP call ─────────────────────────────────────→ [lsp-usage-tracker.cjs]
                                                    tracks nav_count,
                                                    read_count, state
 
                     SessionStart
                     ────────────
 
- New session ──→ [lsp-session-reset.js] ──→ WIPE
+ New session ──→ [lsp-session-reset.cjs] ──→ WIPE
                     clears stale nav_count for current cwd,
                     forces fresh warmup + re-enforces gates
+
+              ──→ [lsp-session-inject.cjs] ──→ INJECT
+                    pushes rules/lsp-first.md into the
+                    session as a systemMessage
 ```
 
-> **v2 note:** versions before v2 had two silent bypass routes that let
-> Claude read code files without ever calling LSP:
-> (1) `Glob("*SymbolName*")` had no guard, and (2) `nav_count` persisted
-> for 24 h across sessions, so a new session inherited "surgical mode"
-> (unlimited reads) from yesterday's LSP work. Both are closed in v2 by
-> `lsp-first-glob-guard.js` and `lsp-session-reset.js`. If you installed
-> v1, re-run `bash install.sh` — it merges the new hooks without touching
-> your existing settings.
+> **v2 → v3 note:** v3 ships the kit as a Claude Code plugin instead of
+> `install.sh`. Hook scripts are now `.cjs`, registered through
+> `hooks/hooks.json`, and resolved via `${CLAUDE_PLUGIN_ROOT}`. The
+> enforcement contract is identical; only the install method changed.
+> If you ran the old `install.sh`, delete the entries from
+> `~/.claude/settings.json` before installing the plugin to avoid
+> double-firing hooks.
 
 ## 🔧 How Each Hook Works
 
-### 1. `lsp-first-guard.js` — Grep Blocker
+### 1. `lsp-first-guard.cjs` — Grep Blocker
 
 **Hook type:** PreToolUse | **Matcher:** `Grep`
 
@@ -226,7 +227,7 @@ LSP tools:
 ```
 If only one provider is installed, only that suggestion appears.
 
-### 2. `lsp-first-glob-guard.js` — Glob Symbol Blocker
+### 2. `lsp-first-glob-guard.cjs` — Glob Symbol Blocker
 
 **Hook type:** PreToolUse | **Matcher:** `Glob`
 
@@ -250,7 +251,7 @@ The guard parses the glob pattern, extracts alphabetic tokens, and blocks if any
 
 **Allowed by design:** lowercase concept searches (`*auth*`, `*subdomain*`) are legitimate file discovery by topic. Only symbol-shaped tokens (casing patterns) are blocked, because those should use `find_workspace_symbols` instead.
 
-### 3. `bash-grep-block.js` — Shell Grep Blocker
+### 3. `bash-grep-block.cjs` — Shell Grep Blocker
 
 **Hook type:** PreToolUse | **Matcher:** `Bash`
 
@@ -258,7 +259,7 @@ Same detection logic, but for `Bash(grep "UserService" src/)`, `Bash(rg handleSu
 
 Allows: `git grep` (history search), non-code paths, non-code file type filters.
 
-### 4. `lsp-first-read-guard.js` — Progressive Read Gate
+### 4. `lsp-first-read-guard.cjs` — Progressive Read Gate
 
 **Hook type:** PreToolUse | **Matcher:** `Read`
 
@@ -317,7 +318,7 @@ Session starts
 
 **Dedup:** Reading the same file at different line ranges counts as 1 Read.
 
-### 5. `lsp-pre-delegation.js` — Agent Pre-Resolution
+### 5. `lsp-pre-delegation.cjs` — Agent Pre-Resolution
 
 **Hook type:** PreToolUse | **Matcher:** `Agent`
 
@@ -349,9 +350,9 @@ Agent({
 | Standard | Implementation agents, worktree-isolated agents | BLOCK during implement phase |
 | Exempt | Reviewers, testers, planners, auditors | Never enforced (read-only) |
 
-### 6. `lsp-session-reset.js` — Stale State Wiper
+### 6. `lsp-session-reset.cjs` — Stale State Wiper
 
-**Hook type:** SessionStart | **Matcher:** `true` (runs on every session start)
+**Hook type:** SessionStart | **Matcher:** *(empty — SessionStart fires once per session regardless of matcher)*
 
 The Read guard's state file (`~/.claude/state/lsp-ready-<cwd-hash>`) has a 24-hour expiry. Without this hook, a new session inherits yesterday's `nav_count` — and if that count was ≥ 2, the guard is permanently in **surgical mode** for today's session: unlimited Reads with zero LSP calls required. A full bypass of the enforcement chain.
 
@@ -374,7 +375,7 @@ Session start
 
 **Safety:** the hook only deletes the flag for the current cwd — other projects' state files are left alone. Failure is silent (never blocks session start).
 
-### 7. `lsp-usage-tracker.js` — State Tracker
+### 7. `lsp-usage-tracker.cjs` — State Tracker
 
 **Hook type:** PostToolUse | **Matcher:** all `mcp__cclsp__*` tools
 
@@ -398,177 +399,76 @@ Tracks successful LSP calls in a per-project state file. Other hooks read this s
 
 ## 📦 Installation
 
-### Option 1: Give the repo to Claude Code (recommended)
+### Prerequisites
+
+- [Claude Code](https://code.claude.com) — CLI ≥ 2.1, Desktop app, or IDE extension
+- Node.js ≥ 18 (Claude Code already requires it; nothing extra to install)
+- An LSP MCP provider — at least one of:
+  - [**cclsp**](https://github.com/ktnyt/cclsp) — TypeScript/JavaScript out of the box, multi-language via `cclsp.json` (see the [Python / Go / Rust](#-optional-python-go-rust-support) section)
+  - [**Serena**](https://github.com/oraios/serena) — multi-language (Python, Go, Rust, Java, TS, Vue, …) via its bundled `solidlsp`
+  - Anthropic's bundled `typescript-lsp` plugin works too (it ships cclsp)
+
+### Recommended — install from the public marketplace
+
+```text
+/plugin marketplace add mmizutani/claude-code-lsp-enforcement-kit
+/plugin install lsp-enforcement-kit@claude-code-lsp-enforcement-kit
+```
+
+That's it. Claude Code clones this repo into its plugin cache, registers the full hook chain (7 enforcement guards + 1 tracker = 8 `.cjs` scripts) via `hooks/hooks.json`, and injects the LSP-first rule on each new session. No files are written to `~/.claude/hooks/`, and your `~/.claude/settings.json` is not modified beyond the standard `enabledPlugins` toggle.
+
+Update to a new release: `/plugin marketplace update claude-code-lsp-enforcement-kit`.
+
+### Local development install
+
+When iterating on the kit itself, point Claude Code at your local clone instead of the marketplace cache:
 
 ```bash
-git clone https://github.com/nesaminua/claude-code-lsp-enforcement-kit.git
+git clone https://github.com/mmizutani/claude-code-lsp-enforcement-kit.git
 cd claude-code-lsp-enforcement-kit
+claude --plugin-dir .
 ```
 
-Then tell Claude Code:
+`--plugin-dir` loads `.claude-plugin/plugin.json` from the given directory each time the session starts, so editing a `.cjs` and re-launching is the dev loop. The marketplace entry in this repo's `.claude-plugin/marketplace.json` uses a GitHub source, so `/plugin marketplace add ./` would still install the published v3.0.0 tag — not your working tree.
 
-```
-Run bash install.sh in this repo to set up LSP enforcement hooks.
-```
+After verifying the dev build, you can validate the full marketplace install path separately:
 
-The install script:
-- Copies 7 hooks + shared `lib/detect-lsp-provider.js` helper to `~/.claude/hooks/`
-- Copies the LSP-first rule to `~/.claude/rules/`
-- **Merges** hook registrations into your existing `~/.claude/settings.json` (won't overwrite your other hooks)
-- Enables the built-in `typescript-lsp` plugin
-- Creates `~/.claude/state/` for tracking
-- Verifies everything at the end
-- Safe to re-run: entries are deduped by command path, so upgrading from v1/v2.0 to v2.1 just adds what's missing without touching anything else
-
-### Option 2: Run the script yourself
-
-**macOS / Linux:**
-```bash
-git clone https://github.com/nesaminua/claude-code-lsp-enforcement-kit.git
-cd claude-code-lsp-enforcement-kit
-bash install.sh
+```text
+/plugin marketplace add ./
+/plugin install lsp-enforcement-kit@claude-code-lsp-enforcement-kit
 ```
 
-**Windows (PowerShell):**
-```powershell
-git clone https://github.com/nesaminua/claude-code-lsp-enforcement-kit.git
-cd claude-code-lsp-enforcement-kit
-pwsh ./install.ps1
-# or: powershell -ExecutionPolicy Bypass -File ./install.ps1
+### Disable or uninstall
+
+```text
+/plugin disable lsp-enforcement-kit@claude-code-lsp-enforcement-kit   # keep installed, suspend hooks
+/plugin uninstall lsp-enforcement-kit@claude-code-lsp-enforcement-kit # remove entirely
+/plugin marketplace remove claude-code-lsp-enforcement-kit             # forget the marketplace
 ```
-
-Output:
-```
-=== LSP Enforcement Kit — Install ===
-
-[1/4] Directories ready
-[2/4] Copied 7 hooks + lib + 1 rule
-[3/4] settings.json updated (merged, not overwritten)
-[4/4] Verifying...
-
-  Hooks installed:  7/7
-  Rule installed:   yes
-  Plugin enabled:   yes
-  State directory:  yes
-
-Done. Restart Claude Code to activate.
-```
-
-### Option 3: Manual setup
-
-<details>
-<summary>Click to expand manual steps</summary>
-
-#### Prerequisites
-
-- Claude Code (CLI, Desktop, or IDE extension)
-- TypeScript/JavaScript project
-
-#### Step 1: Copy files
-
-```bash
-mkdir -p ~/.claude/hooks ~/.claude/state ~/.claude/rules
-cp hooks/*.js ~/.claude/hooks/
-cp rules/lsp-first.md ~/.claude/rules/
-```
-
-#### Step 2: Enable the plugin
-
-In `~/.claude/settings.json`, add to `enabledPlugins`:
-
-```json
-{
-  "enabledPlugins": {
-    "typescript-lsp@claude-plugins-official": true
-  }
-}
-```
-
-#### Step 3: Register hooks in settings.json
-
-**IMPORTANT:** If you already have hooks, **add** these entries to your existing arrays — don't replace them.
-
-Add to `PreToolUse` array:
-
-```json
-{
-  "matcher": "Grep",
-  "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/lsp-first-guard.js" }]
-},
-{
-  "matcher": "Glob",
-  "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/lsp-first-glob-guard.js" }]
-},
-{
-  "matcher": "Bash",
-  "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/bash-grep-block.js" }]
-},
-{
-  "matcher": "Read",
-  "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/lsp-first-read-guard.js" }]
-},
-{
-  "matcher": "Agent",
-  "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/lsp-pre-delegation.js" }]
-}
-```
-
-Add to `PostToolUse` array:
-
-```json
-{
-  "matcher": "mcp__cclsp__find_definition|mcp__cclsp__find_references|mcp__cclsp__find_workspace_symbols|mcp__cclsp__find_implementation|mcp__cclsp__get_hover|mcp__cclsp__get_diagnostics|mcp__cclsp__get_incoming_calls|mcp__cclsp__get_outgoing_calls",
-  "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/lsp-usage-tracker.js" }]
-}
-```
-
-Add to `SessionStart` array (create it if missing):
-
-```json
-{
-  "matcher": "true",
-  "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/lsp-session-reset.js" }]
-}
-```
-
-</details>
 
 ### Verify
 
-Run the health-check script:
+Restart Claude Code, then ask `Where is handleSubmit defined?` — Claude should use `find_definition`, not Grep. Or trigger a guard intentionally:
+
+```
+You: Run Grep("handleSubmit") on src/
+Claude: ⛔ LSP-FIRST BLOCK — code symbols in Grep, use mcp__cclsp__find_references("handleSubmit") instead
+```
+
+Inspect the full install (recommended one-liner):
 
 ```bash
-bash scripts/lsp-status.sh
-# or from anywhere after install:
-bash ~/.claude/scripts/lsp-status.sh
+bash ~/.claude/plugins/cache/claude-code-lsp-enforcement-kit/lsp-enforcement-kit/*/scripts/lsp-status.sh
 ```
 
-Expected output:
+This checks: plugin cache present → enabledPlugins entry → all 8 hook scripts intact → shared helper resolves → at least one LSP MCP provider detected → current-cwd runtime state. Exits non-zero if anything is off, with the exact command to fix it.
 
+Or peek at the raw runtime state for the cwd you're in:
+
+```bash
+ls ~/.claude/state/lsp-ready-*    # one flag file per cwd you've worked in
+cat ~/.claude/state/lsp-ready-*   # warmup_done, nav_count, read_count, last_tool
 ```
-LSP Enforcement Kit — Status
-============================
-
-  Hook files:          ✓ 7/7
-  Shared lib/helper:   ✓ yes
-  Settings registered: ✓ PreToolUse(5) PostToolUse(1) SessionStart(1)
-  Detected providers:  ✓ cclsp
-
-State for current cwd (/path/to/project)
-------------------------
-  Warmup done:         yes
-  nav_count:           5 (LSP navigation calls)
-  read_count:          7 (unique code files read)
-  Last tool:           mcp__cclsp__find_references (2min ago)
-
-  ✓ Surgical mode active — all Reads unlimited for this session.
-
-Diagnostic summary
-------------------
-  All checks passed. Enforcement is active.
-```
-
-Or restart Claude Code and ask "Where is handleSubmit defined?" — Claude should use `find_definition`, not Grep.
 
 ## 📚 LSP Tool Reference
 
@@ -658,8 +558,8 @@ Claude Code subagents cannot access MCP tools (architectural limitation). Withou
 **Q: Known issues?**
 `find_workspace_symbols` fails with "No Project" if called before any file-based LSP tool (cclsp upstream bug). The tracker detects this and tells Claude to call `get_diagnostics` first. Not a timing issue — ordering issue.
 
-**Q: I installed v1 and shared it with my team — should I upgrade?**
-Yes. v1 had two silent bypass routes (Glob symbol search and stale session state) that let Claude navigate code without ever calling LSP. Both are closed in v2. Just re-run `bash install.sh` — it's idempotent and only adds the missing hook entries to your `settings.json`. No existing configuration is touched.
+**Q: I installed v1 / v2 via `install.sh` and shared it with my team — should I upgrade?**
+Yes. v3 ships the kit as a Claude Code plugin and supersedes the shell installer. Have each teammate remove the old hook entries from `~/.claude/settings.json` (or delete `~/.claude/hooks/lsp-*`) and then run `/plugin marketplace add mmizutani/claude-code-lsp-enforcement-kit` + `/plugin install lsp-enforcement-kit@claude-code-lsp-enforcement-kit`. The enforcement contract is unchanged — only the install mechanism switched.
 
 **Q: Does this work with Serena?**
 Yes. Since **v2.1**, the kit detects your LSP MCP provider and tailors its block-message suggestions. If you run [Serena](https://github.com/oraios/serena) (the multi-language MCP symbol toolkit by Oraios AI — MIT), the hooks will point you at `mcp__serena__find_symbol`, `find_referencing_symbols`, and `get_symbols_overview` instead of cclsp tools. The enforcement logic (Grep/Glob/Read/Agent gates, session reset) is provider-agnostic — it works the same for both. You can also run cclsp and Serena side-by-side; suggestions then show both.
@@ -682,7 +582,7 @@ MIT — see [LICENSE](LICENSE)
 <p align="center">
   Made for Claude Code power users who care about token efficiency.
   <br>
-  <a href="https://github.com/nesaminua/claude-code-lsp-enforcement-kit/issues">Report an issue</a> &bull;
-  <a href="https://github.com/nesaminua/claude-code-lsp-enforcement-kit/releases">Releases</a> &bull;
+  <a href="https://github.com/mmizutani/claude-code-lsp-enforcement-kit/issues">Report an issue</a> &bull;
+  <a href="https://github.com/mmizutani/claude-code-lsp-enforcement-kit/releases">Releases</a> &bull;
   <a href="CHANGELOG.md">Changelog</a>
 </p>

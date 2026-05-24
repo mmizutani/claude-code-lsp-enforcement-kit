@@ -1,150 +1,234 @@
 #!/usr/bin/env bash
-# lsp-status.sh — LSP Enforcement Kit diagnostic
+# lsp-status.sh — LSP Enforcement Kit diagnostic (plugin install model).
 #
-# Prints the current installation + runtime state so users can debug
-# "why isn't my Grep blocked?" or "is the kit even active?" without
-# manually poking around ~/.claude/.
+# Verifies that:
+#   1. The plugin is installed and enabled (any scope: user/project/local).
+#   2. The cached plugin tree contains all .cjs hook scripts + the helper
+#      + hooks.json.
+#   3. The detect-lsp-provider helper resolves (informational — missing
+#      providers degrade block-suggestions but do NOT disable enforcement).
+#   4. The current cwd's runtime state file is present and consistent.
+#
+# Authoritative source of truth: `claude plugin list --json`. We fall back
+# to scanning ~/.claude/settings.json:enabledPlugins only if the CLI is
+# unavailable.
 #
 # Usage:
 #   bash scripts/lsp-status.sh
-#   # or from anywhere after install:
-#   bash ~/.claude/scripts/lsp-status.sh
+#   bash <plugin-cache-dir>/scripts/lsp-status.sh
+#
+# Exits 0 if enforcement is active, 1 if any blocking issue is found.
+
 set -euo pipefail
 
-CLAUDE_DIR="$HOME/.claude"
-HOOKS_DIR="$CLAUDE_DIR/hooks"
-STATE_DIR="$CLAUDE_DIR/state"
-SETTINGS="$CLAUDE_DIR/settings.json"
+PLUGIN_ID="lsp-enforcement-kit@claude-code-lsp-enforcement-kit"
+PLUGIN_NAME="lsp-enforcement-kit"
+MARKETPLACE_NAME="claude-code-lsp-enforcement-kit"
 
-# Colors only if stdout is a tty
+CLAUDE_DIR="${HOME}/.claude"
+STATE_DIR="${CLAUDE_DIR}/state"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Colors only on a tty.
 if [ -t 1 ]; then
   GREEN=$'\033[32m'; RED=$'\033[31m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; BOLD=$'\033[1m'; NC=$'\033[0m'
+  COLOR_MODE="color"
 else
   GREEN=''; RED=''; YELLOW=''; DIM=''; BOLD=''; NC=''
+  COLOR_MODE="no-color"
 fi
 
-check() { [ "$1" = "ok" ] && printf '%s✓%s' "$GREEN" "$NC" || printf '%s✗%s' "$RED" "$NC"; }
+ok()   { printf '%s✓%s' "${GREEN}" "${NC}"; }
+fail() { printf '%s✗%s' "${RED}" "${NC}"; }
+warn() { printf '%s!%s' "${YELLOW}" "${NC}"; }
 
-echo "${BOLD}LSP Enforcement Kit — Status${NC}"
-echo "============================"
+echo "${BOLD}LSP Enforcement Kit — Status${NC} (plugin install model)"
+echo "============================================="
 echo
 
-# 1. Hook files installed
-EXPECTED_HOOKS=(
-  bash-grep-block.js
-  lsp-first-guard.js
-  lsp-first-glob-guard.js
-  lsp-first-read-guard.js
-  lsp-pre-delegation.js
-  lsp-session-reset.js
-  lsp-usage-tracker.js
-)
-installed=0; missing=()
-for h in "${EXPECTED_HOOKS[@]}"; do
-  if [ -f "$HOOKS_DIR/$h" ]; then installed=$((installed+1)); else missing+=("$h"); fi
-done
-helper_ok="no"
-if [ -f "$HOOKS_DIR/lib/detect-lsp-provider.js" ]; then helper_ok="yes"; fi
+PLUGIN_ROOT=""
+ENABLED_STATUS="missing"
+SCOPE=""
+VERSION=""
 
-status="ok"; [ $installed -eq 7 ] || status="bad"
-printf '  Hook files:          %s %d/7 ' "$(check $status)" "$installed"
-[ ${#missing[@]} -gt 0 ] && printf '%s(missing: %s)%s' "$DIM" "${missing[*]}" "$NC"
-echo
-printf '  Shared lib/helper:   %s %s\n' "$(check $([ "$helper_ok" = "yes" ] && echo ok || echo bad))" "$helper_ok"
+# ── 1. Authoritative lookup via `claude plugin list --json` ────────────────
+# We pipe the JSON into a Node helper and read 4 newline-separated raw values
+# with `read -r`. Crucially: no `eval`, no JSON.stringify (JSON escaping is
+# not shell escaping — `$(...)`/backticks in a value would still expand).
+#
+# Helper exit codes drive how we treat the result:
+#   0 → plugin found, values printed → use them, skip fallback
+#   1 → plugin authoritatively NOT in list → use the "missing" payload, skip
+#       fallback (we trust the CLI; an out-of-date cache must not mask this)
+#   2 → input wasn't valid JSON (CLI broken / misformatted) → fall through
+#   *  → CLI itself unavailable / unreadable → fall through
+cli_consulted=0
+if command -v claude >/dev/null 2>&1; then
+  if PLUGIN_QUERY="$(claude plugin list --json 2>/dev/null)"; then
+    plugin_lookup="$(printf '%s' "${PLUGIN_QUERY}" \
+      | node "${SCRIPT_DIR}/find-installed-plugin.cjs" "${PLUGIN_ID}" 2>/dev/null)" \
+      && lookup_rc=0 || lookup_rc=$?
 
-# 2. Settings.json registration
-if [ ! -f "$SETTINGS" ]; then
-  echo "  Settings:            $(check bad) $SETTINGS not found"
+    case "${lookup_rc}" in
+      0|1)
+        # Authoritative result. Consume the 4 lines even when status=missing
+        # so PLUGIN_ROOT correctly remains empty and we skip the fallback.
+        {
+          IFS= read -r PLUGIN_ROOT || PLUGIN_ROOT=""
+          IFS= read -r ENABLED_STATUS || ENABLED_STATUS="missing"
+          IFS= read -r SCOPE || SCOPE=""
+          IFS= read -r VERSION || VERSION=""
+        } <<EOF
+${plugin_lookup}
+EOF
+        cli_consulted=1
+        ;;
+      *)
+        # JSON parse failure or some other helper-internal error.
+        # Treat this the same as "CLI unavailable" — fall through to scan.
+        ;;
+    esac
+  fi
+fi
+
+# Fallback: only when the authoritative CLI lookup couldn't be made.
+# A successful CLI lookup that *says* the plugin is missing must NOT be
+# overridden by a stale ~/.claude/plugins/cache entry from a prior install.
+if [ "${cli_consulted}" -eq 0 ] && [ -f "${CLAUDE_DIR}/settings.json" ]; then
+  PLUGIN_ROOT_BASE="${CLAUDE_DIR}/plugins/cache/${MARKETPLACE_NAME}/${PLUGIN_NAME}"
+  if [ -d "${PLUGIN_ROOT_BASE}" ]; then
+    # `sort -V` exists on macOS BSD sort (10.7+) and GNU coreutils — both
+    # current Claude Code targets. If a version directory exists at all,
+    # the find/sort/tail chain returns the newest. We still defend against
+    # an empty result (cache base exists but no version subdir was created).
+    candidate="$(find "${PLUGIN_ROOT_BASE}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)"
+    if [ -n "${candidate}" ] && [ -d "${candidate}" ]; then
+      PLUGIN_ROOT="${candidate}"
+      VERSION="${PLUGIN_ROOT##*/}"
+      SCOPE="user(fallback)"
+    fi
+  fi
+  if status_out="$(node "${SCRIPT_DIR}/check-enabled-plugin.cjs" "${CLAUDE_DIR}/settings.json" "${PLUGIN_ID}" 2>/dev/null)"; then
+    ENABLED_STATUS="${status_out%$'\n'}"
+  else
+    ENABLED_STATUS="${status_out%$'\n'}"
+    [ -z "${ENABLED_STATUS}" ] && ENABLED_STATUS="missing"
+  fi
+fi
+
+if [ -z "${PLUGIN_ROOT}" ] || [ ! -d "${PLUGIN_ROOT}" ]; then
+  echo "  Plugin install:      $(fail) not installed"
+  echo "  ${DIM}Run: /plugin marketplace add mmizutani/claude-code-lsp-enforcement-kit${NC}"
+  echo "  ${DIM}Then: /plugin install ${PLUGIN_ID}${NC}"
   exit 1
 fi
 
-# Safely parse JSON via node (avoid grep on the file for unrelated keys)
-eval "$(node -e "
-  const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
-  const count = (arr, sub) => (arr || []).filter(e => (e.hooks || []).some(h => (h.command || '').includes(sub))).length;
-  const pre = s.hooks && s.hooks.PreToolUse || [];
-  const post = s.hooks && s.hooks.PostToolUse || [];
-  const start = s.hooks && s.hooks.SessionStart || [];
-  console.log('PRE_GREP=' + count(pre, 'lsp-first-guard.js'));
-  console.log('PRE_GLOB=' + count(pre, 'lsp-first-glob-guard.js'));
-  console.log('PRE_BASH=' + count(pre, 'bash-grep-block.js'));
-  console.log('PRE_READ=' + count(pre, 'lsp-first-read-guard.js'));
-  console.log('PRE_AGENT=' + count(pre, 'lsp-pre-delegation.js'));
-  console.log('POST_TRACKER=' + count(post, 'lsp-usage-tracker.js'));
-  console.log('SESSION_RESET=' + count(start, 'lsp-session-reset.js'));
-" 2>/dev/null || echo 'PRE_GREP=0 PRE_GLOB=0 PRE_BASH=0 PRE_READ=0 PRE_AGENT=0 POST_TRACKER=0 SESSION_RESET=0')"
+printf '  Plugin install:      %s installed (v%s, scope=%s)\n' "$(ok)" "${VERSION:-unknown}" "${SCOPE:-unknown}"
+printf '  Plugin root:         %s%s%s\n' "${DIM}" "${PLUGIN_ROOT}" "${NC}"
 
-total_pre=$((PRE_GREP + PRE_GLOB + PRE_BASH + PRE_READ + PRE_AGENT))
-registered_all=0
-[ $PRE_GREP -ge 1 ] && [ $PRE_GLOB -ge 1 ] && [ $PRE_BASH -ge 1 ] && \
-  [ $PRE_READ -ge 1 ] && [ $PRE_AGENT -ge 1 ] && \
-  [ $POST_TRACKER -ge 1 ] && [ $SESSION_RESET -ge 1 ] && registered_all=1
+case "${ENABLED_STATUS}" in
+  enabled)  printf '  Plugin status:       %s enabled\n' "$(ok)" ;;
+  disabled) printf '  Plugin status:       %s disabled — run "/plugin enable %s"\n' "$(warn)" "${PLUGIN_ID}" ;;
+  missing)  printf '  Plugin status:       %s no enabledPlugins entry — run "/plugin install %s"\n' "$(fail)" "${PLUGIN_ID}" ;;
+  *)        printf '  Plugin status:       %s could not determine (got "%s")\n' "$(fail)" "${ENABLED_STATUS}" ;;
+esac
 
-printf '  Settings registered: %s PreToolUse(%d) PostToolUse(%d) SessionStart(%d)\n' \
-  "$(check $([ $registered_all -eq 1 ] && echo ok || echo bad))" \
-  "$total_pre" "$POST_TRACKER" "$SESSION_RESET"
-
-# 3. Detected LSP providers via the helper (if present)
-if [ -f "$HOOKS_DIR/lib/detect-lsp-provider.js" ]; then
-  providers=$(node -e "
-    try {
-      const lib = require('$HOOKS_DIR/lib/detect-lsp-provider.js');
-      const p = lib.detectProviders();
-      console.log(p.length ? p.join(', ') : '(none detected)');
-    } catch (e) { console.log('(helper error)'); }
-  " 2>/dev/null)
-  provider_status="ok"; [ "$providers" = "(none detected)" ] && provider_status="warn"
-  icon=$(check $provider_status)
-  [ "$provider_status" = "warn" ] && icon="${YELLOW}!${NC}"
-  printf '  Detected providers:  %s %s\n' "$icon" "$providers"
-fi
-
-# 4. Current cwd state file
-CWD_HASH=$(node -e "console.log(require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0,12))" 2>/dev/null || echo "")
-FLAG="$STATE_DIR/lsp-ready-$CWD_HASH"
-
-echo
-echo "${BOLD}State for current cwd${NC} ($(pwd))"
-echo "------------------------"
-if [ -n "$CWD_HASH" ] && [ -f "$FLAG" ]; then
-  eval "$(node -e "
-    try {
-      const d = JSON.parse(require('fs').readFileSync('$FLAG','utf8'));
-      console.log('WARMUP_DONE=' + (d.warmup_done ? 'yes' : 'no'));
-      console.log('NAV_COUNT=' + (d.nav_count || 0));
-      console.log('READ_COUNT=' + (d.read_count || 0));
-      console.log('LAST_TOOL=' + (d.last_tool || '(none)'));
-      const age = Math.round((Date.now() - (d.timestamp || 0)) / 60000);
-      console.log('AGE_MIN=' + age);
-    } catch (e) { console.log('WARMUP_DONE=error NAV_COUNT=0 READ_COUNT=0 LAST_TOOL=? AGE_MIN=0'); }
-  ")"
-  printf '  Warmup done:         %s\n' "$WARMUP_DONE"
-  printf '  nav_count:           %d %s(LSP navigation calls)%s\n' "$NAV_COUNT" "$DIM" "$NC"
-  printf '  read_count:          %d %s(unique code files read)%s\n' "$READ_COUNT" "$DIM" "$NC"
-  printf '  Last tool:           %s %s(%dmin ago)%s\n' "$LAST_TOOL" "$DIM" "$AGE_MIN" "$NC"
-  printf '  Flag file:           %s%s%s\n' "$DIM" "$FLAG" "$NC"
-
-  echo
-  if [ "$WARMUP_DONE" = "yes" ] && [ "$NAV_COUNT" -ge 2 ]; then
-    echo "  ${GREEN}✓${NC} Surgical mode active — all Reads unlimited for this session."
-  elif [ "$WARMUP_DONE" = "yes" ] && [ "$NAV_COUNT" -ge 1 ]; then
-    echo "  ${YELLOW}!${NC} Gate 4 open (reads 4-5 allowed). Make 1 more LSP nav call to unlock surgical mode."
-  elif [ "$WARMUP_DONE" = "yes" ]; then
-    echo "  ${YELLOW}!${NC} Warmup done, but 0 navigation calls. Gate 3 warn / Gate 4 block on next reads."
+# ── 2. Hook & helper file inventory ─────────────────────────────────────────
+EXPECTED_HOOKS=(
+  bash-grep-block.cjs
+  lsp-first-guard.cjs
+  lsp-first-glob-guard.cjs
+  lsp-first-read-guard.cjs
+  lsp-pre-delegation.cjs
+  lsp-session-inject.cjs
+  lsp-session-reset.cjs
+  lsp-usage-tracker.cjs
+)
+installed=0
+missing=()
+for h in "${EXPECTED_HOOKS[@]}"; do
+  if [ -f "${PLUGIN_ROOT}/hooks/${h}" ]; then
+    installed=$((installed + 1))
   else
-    echo "  ${YELLOW}!${NC} Not warmed up. Gate 1 will block the first Read of a code file."
+    missing+=("${h}")
   fi
+done
+
+hooks_total=${#EXPECTED_HOOKS[@]}
+hooks_icon="$(ok)"
+[ "${installed}" -eq "${hooks_total}" ] || hooks_icon="$(fail)"
+printf '  Hook scripts:        %s %d/%d' "${hooks_icon}" "${installed}" "${hooks_total}"
+if [ ${#missing[@]} -gt 0 ]; then
+  printf ' %s(missing: %s)%s' "${DIM}" "${missing[*]}" "${NC}"
+fi
+echo
+
+if [ -f "${PLUGIN_ROOT}/hooks/lib/detect-lsp-provider.cjs" ]; then
+  helper_ok=1
+  printf '  Shared helper:       %s detect-lsp-provider.cjs\n' "$(ok)"
 else
-  echo "  ${DIM}No state file for this cwd yet. First Read of a code file will trigger Gate 1 warmup.${NC}"
-  [ -n "$CWD_HASH" ] && echo "  ${DIM}Expected path: $FLAG${NC}"
+  helper_ok=0
+  printf '  Shared helper:       %s detect-lsp-provider.cjs missing\n' "$(fail)"
 fi
 
+if [ -f "${PLUGIN_ROOT}/hooks/hooks.json" ]; then
+  hooks_json_ok=1
+  printf '  hooks.json:          %s present\n' "$(ok)"
+else
+  hooks_json_ok=0
+  printf '  hooks.json:          %s missing\n' "$(fail)"
+fi
+
+# ── 3. Detected LSP providers (informational) ───────────────────────────────
+if [ "${helper_ok}" -eq 1 ]; then
+  set +e
+  providers_out="$(node "${SCRIPT_DIR}/detect-providers.cjs" "${PLUGIN_ROOT}" 2>/dev/null)"
+  providers_rc=$?
+  set -e
+  case "${providers_rc}" in
+    0) printf '  LSP providers:       %s %s\n' "$(ok)"   "${providers_out}" ;;
+    1)
+      printf '  LSP providers:       %s %s\n' "$(warn)" "${providers_out}"
+      printf '    %sInstall cclsp or Serena for LSP-specific block suggestions (enforcement still fires).%s\n' "${DIM}" "${NC}" ;;
+    *) printf '  LSP providers:       %s helper error\n' "$(fail)" ;;
+  esac
+fi
+
+# ── 4. Per-cwd runtime state ────────────────────────────────────────────────
+CWD_HASH="$(node -e "console.log(require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0,12))" 2>/dev/null || echo "")"
+FLAG="${STATE_DIR}/lsp-ready-${CWD_HASH}"
+
 echo
-echo "${BOLD}Diagnostic summary${NC}"
-echo "------------------"
-[ $installed -eq 7 ] && [ $registered_all -eq 1 ] && [ "$helper_ok" = "yes" ] && {
-  echo "  ${GREEN}All checks passed.${NC} Enforcement is active. Try Grep(\"SomeSymbol\") to verify blocking."
+echo "${BOLD}Runtime state for cwd${NC} ($(pwd))"
+echo "----------------------"
+if [ -n "${CWD_HASH}" ]; then
+  set +e
+  node "${SCRIPT_DIR}/print-runtime-state.cjs" "${FLAG}" "${COLOR_MODE}" | grep -v '^STATUS='
+  set -e
+else
+  echo "  ${DIM}Could not compute cwd hash (node missing?).${NC}"
+fi
+
+# ── Summary ─────────────────────────────────────────────────────────────────
+echo
+echo "${BOLD}Summary${NC}"
+echo "-------"
+all_ok=1
+[ "${installed}" -eq "${hooks_total}" ] || all_ok=0
+[ "${helper_ok}" -eq 1 ]              || all_ok=0
+[ "${hooks_json_ok}" -eq 1 ]          || all_ok=0
+[ "${ENABLED_STATUS}" = "enabled" ]   || all_ok=0
+# Note: LSP-provider detection is intentionally NOT included — enforcement
+# still fires without one, the kit just falls back to generic block hints.
+
+if [ "${all_ok}" -eq 1 ]; then
+  echo "  ${GREEN}All checks passed.${NC} Enforcement is active."
+  echo "  ${DIM}Try Grep(\"SomeCamelSymbol\") in a fresh Claude Code session to verify.${NC}"
   exit 0
-}
-echo "  ${RED}Issues detected.${NC} Re-run 'bash install.sh' to fix missing components."
+fi
+
+echo "  ${RED}Issues detected.${NC} Re-install with:"
+echo "    /plugin marketplace update ${MARKETPLACE_NAME}"
+echo "    /plugin install ${PLUGIN_ID}"
 exit 1

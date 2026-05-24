@@ -1,5 +1,6 @@
 {
   "name": "claude-code-lsp-enforcement-kit",
+  "description": "Hooks that force Claude Code to navigate code via LSP (cclsp, Serena) instead of Grep/Read — typically 70%+ navigation-token savings.",
   "owner": {
     "name": "mmizutani"
   },

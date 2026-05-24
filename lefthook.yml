@@ -1,35 +1,30 @@
 # Lefthook configuration for claude-code-lsp-enforcement-kit
 # https://github.com/evilmartians/lefthook
+#
+# These commands assume the repo's devDependencies are already installed
+# (`npm ci --ignore-scripts --no-audit --no-fund`). The validate scripts no
+# longer auto-install — running them in parallel against a clean checkout
+# would race on the same node_modules. lefthook can be configured to
+# bootstrap once via `lefthook install --no-tty` followed by `npm ci`,
+# typically wired into the team's onboarding script.
 
 pre-commit:
   parallel: true
   commands:
     validate-marketplace-manifest:
       glob: "{.claude-plugin/marketplace.json,schemas/claude-plugin-marketplace-manifest.schema.json}"
-      run: |
-        echo "Validating Marketplace manifest..."
-        claude plugin validate . && \
-        npx -y -p ajv-cli@latest -p ajv-formats@latest ajv validate \
-          --spec=draft2020 \
-          -s schemas/claude-plugin-marketplace-manifest.schema.json \
-          -d .claude-plugin/marketplace.json \
-          --all-errors \
-          --errors=text \
-          -c ajv-formats
+      run: ./scripts/validate-marketplace-manifest.sh
 
     validate-plugin-manifest:
-      glob: "{.claude-plugin/plugin.json,schemas/claude-plugin-manifest.schema.json}"
-      run: |
-        echo "Validating Plugin manifest..."
-        claude plugin validate . && \
-        npx -y -p ajv-cli@latest -p ajv-formats@latest ajv validate \
-          --spec=draft2020 \
-          -s schemas/claude-plugin-manifest.schema.json \
-          -d .claude-plugin/plugin.json \
-          --all-errors \
-          --errors=text \
-          -c ajv-formats
+      glob: "{.claude-plugin/plugin.json,schemas/claude-plugin-manifest.schema.json,hooks/**/*.cjs,hooks/hooks.json}"
+      run: ./scripts/validate-plugin-manifest.sh
+
+    shell-syntax:
+      # Catch typos / unbalanced quotes / unclosed heredocs before they ship.
+      # `bash -n` is parse-only — no commands run, no side effects.
+      glob: "scripts/*.sh"
+      run: bash -n {staged_files}
 
     run-tests:
-      glob: "{hooks/*.cjs,hooks/lib/*.cjs,tests/*.test.cjs,.claude-plugin/*.json,hooks/hooks.json,rules/*.md}"
+      glob: "{hooks/*.cjs,hooks/lib/*.cjs,tests/*.test.cjs,.claude-plugin/*.json,hooks/hooks.json,rules/*.md,scripts/*.cjs,scripts/*.sh,package*.json}"
       run: node --test 'tests/*.test.cjs'
